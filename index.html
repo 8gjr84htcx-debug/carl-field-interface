@@ -330,6 +330,25 @@
     letter-spacing: 0.04em;
   }
 
+  .btn-tts {
+    display: none;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #ffffff;
+    padding: 4px 10px;
+    font-size: 1.1rem;
+    line-height: 1;
+    border-radius: 4px;
+    cursor: pointer;
+    min-width: 36px;
+    text-align: center;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .btn-tts:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); }
+  .btn-tts.visible { display: inline-flex; align-items: center; justify-content: center; }
+  .btn-tts.loading { opacity: 0.5; cursor: wait; }
+
   .eval-badge {
     font-size: 0.8rem;
     font-weight: 800;
@@ -501,6 +520,7 @@
     <div class="result-card">
       <div class="result-header">
         <h2>AF IMT 1477 — Page 2 Entry</h2>
+        <button class="btn-tts" id="ttsBtn" onclick="toggleTts()" title="Read result aloud">&#x1F50A;</button>
         <span class="eval-badge" id="evalBadge"></span>
       </div>
       <div class="result-body">
@@ -701,7 +721,12 @@ function renderResults(d) {
   results.classList.add('visible');
   results.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  speakResult(d);
+  lastResultData = d;
+  stopTtsAudio();
+  var ttsBtn = document.getElementById('ttsBtn');
+  ttsBtn.classList.add('visible');
+  ttsBtn.classList.remove('loading');
+  ttsBtn.innerHTML = '&#x1F50A;';
 }
 
 function escapeHtml(str) {
@@ -834,13 +859,39 @@ async function transcribeAudio(blob) {
   }
 }
 
-// Voice output via ElevenLabs TTS
-async function speakResult(d) {
+// Voice output via ElevenLabs TTS (on-demand)
+var lastResultData = null;
+var ttsAudio = null;
+var ttsPlaying = false;
+
+function stopTtsAudio() {
+  if (ttsAudio) {
+    ttsAudio.pause();
+    if (ttsAudio.src) URL.revokeObjectURL(ttsAudio.src);
+    ttsAudio = null;
+  }
+  ttsPlaying = false;
+}
+
+async function toggleTts() {
+  var btn = document.getElementById('ttsBtn');
+
+  if (ttsPlaying) {
+    stopTtsAudio();
+    btn.innerHTML = '&#x1F50A;';
+    return;
+  }
+
+  if (!lastResultData) return;
+
+  var d = lastResultData;
   var discipline = d.discipline || 'unknown discipline';
   var citation = d.primary_regulatory_citation || 'no citation';
   var action = d.corrective_action_required || 'no corrective action specified';
-
   var summary = 'Discipline: ' + discipline + '. Citation: ' + citation + '. Action: ' + action + '.';
+
+  btn.classList.add('loading');
+  btn.innerHTML = '&#x23F3;';
 
   try {
     var resp = await fetch('https://api.elevenlabs.io/v1/text-to-speech/LyZq9ggDlPpK7b17wpjG', {
@@ -857,18 +908,35 @@ async function speakResult(d) {
 
     if (!resp.ok) {
       console.error('[CARL TTS] HTTP ' + resp.status + ':', await resp.text());
+      btn.classList.remove('loading');
+      btn.innerHTML = '&#x1F50A;';
       return;
     }
 
     var audioBlob = await resp.blob();
     var url = URL.createObjectURL(audioBlob);
-    var audio = new Audio(url);
-    audio.onended = function() { URL.revokeObjectURL(url); };
-    audio.play().catch(function(err) {
+    stopTtsAudio();
+    ttsAudio = new Audio(url);
+    ttsPlaying = true;
+    btn.classList.remove('loading');
+    btn.innerHTML = '&#x23F8;';
+
+    ttsAudio.onended = function() {
+      URL.revokeObjectURL(url);
+      ttsAudio = null;
+      ttsPlaying = false;
+      btn.innerHTML = '&#x1F50A;';
+    };
+
+    ttsAudio.play().catch(function(err) {
       console.error('[CARL TTS] Playback blocked:', err.message);
+      ttsPlaying = false;
+      btn.innerHTML = '&#x1F50A;';
     });
   } catch (err) {
     console.error('[CARL TTS] Error:', err.message);
+    btn.classList.remove('loading');
+    btn.innerHTML = '&#x1F50A;';
   }
 }
 </script>
