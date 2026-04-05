@@ -700,6 +700,8 @@ function renderResults(d) {
 
   results.classList.add('visible');
   results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  speakResult(d);
 }
 
 function escapeHtml(str) {
@@ -780,6 +782,10 @@ async function transcribeAudio(blob) {
   var textarea = document.getElementById('observation');
   var errorMsg = document.getElementById('errorMsg');
 
+  var savedValue = textarea.value;
+  textarea.value = 'Transcribing...';
+  textarea.disabled = true;
+
   try {
     var ext = 'webm';
     var mime = blob.type || '';
@@ -807,21 +813,60 @@ async function transcribeAudio(blob) {
     var transcribed = data.text || '';
 
     if (transcribed) {
-      var current = textarea.value;
-      if (current && !current.endsWith(' ') && !current.endsWith('\n')) {
-        current += ' ';
+      if (savedValue && !savedValue.endsWith(' ') && !savedValue.endsWith('\n')) {
+        savedValue += ' ';
       }
-      textarea.value = current + transcribed;
+      textarea.value = savedValue + transcribed;
+    } else {
+      textarea.value = savedValue;
     }
 
     textarea.focus();
   } catch (err) {
+    textarea.value = savedValue;
     errorMsg.textContent = 'Transcription error: ' + err.message;
     errorMsg.classList.add('visible');
   } finally {
+    textarea.disabled = false;
     btn.classList.remove('transcribing');
     btn.innerHTML = '&#x1F3A4;';
     btn.title = 'Voice input';
+  }
+}
+
+// Voice output via ElevenLabs TTS
+var TTS_VOICE_ID = 'LyZq9ggDlPpK7b17wpjG';
+
+async function speakResult(d) {
+  var discipline = d.discipline || 'unknown discipline';
+  var citation = d.primary_regulatory_citation || 'no citation';
+  var score = d.confidence_score != null ? Math.round(d.confidence_score * 100) + ' percent' : 'unknown';
+  var action = d.corrective_action_required || 'no corrective action specified';
+
+  var summary = discipline + ' finding per ' + citation + ', confidence ' + score + '. ' + action;
+
+  try {
+    var resp = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + TTS_VOICE_ID, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model_id: 'eleven_turbo_v2',
+        text: summary
+      })
+    });
+
+    if (!resp.ok) return;
+
+    var audioBlob = await resp.blob();
+    var url = URL.createObjectURL(audioBlob);
+    var audio = new Audio(url);
+    audio.onended = function() { URL.revokeObjectURL(url); };
+    audio.play();
+  } catch (err) {
+    // TTS failure is non-critical, silently ignore
   }
 }
 </script>
