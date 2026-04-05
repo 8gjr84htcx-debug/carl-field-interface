@@ -835,18 +835,15 @@ async function transcribeAudio(blob) {
 }
 
 // Voice output via ElevenLabs TTS
-var TTS_VOICE_ID = 'LyZq9ggDlPpK7b17wpjG';
-
 async function speakResult(d) {
   var discipline = d.discipline || 'unknown discipline';
   var citation = d.primary_regulatory_citation || 'no citation';
-  var score = d.confidence_score != null ? Math.round(d.confidence_score * 100) + ' percent' : 'unknown';
   var action = d.corrective_action_required || 'no corrective action specified';
 
-  var summary = discipline + ' finding per ' + citation + ', confidence ' + score + '. ' + action;
+  var summary = 'Discipline: ' + discipline + '. Citation: ' + citation + '. Action: ' + action + '.';
 
   try {
-    var resp = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + TTS_VOICE_ID, {
+    var resp = await fetch('https://api.elevenlabs.io/v1/text-to-speech/LyZq9ggDlPpK7b17wpjG', {
       method: 'POST',
       headers: {
         'xi-api-key': ELEVENLABS_API_KEY,
@@ -858,15 +855,20 @@ async function speakResult(d) {
       })
     });
 
-    if (!resp.ok) return;
+    if (!resp.ok) {
+      console.error('[CARL TTS] HTTP ' + resp.status + ':', await resp.text());
+      return;
+    }
 
     var audioBlob = await resp.blob();
     var url = URL.createObjectURL(audioBlob);
     var audio = new Audio(url);
     audio.onended = function() { URL.revokeObjectURL(url); };
-    audio.play();
+    audio.play().catch(function(err) {
+      console.error('[CARL TTS] Playback blocked:', err.message);
+    });
   } catch (err) {
-    // TTS failure is non-critical, silently ignore
+    console.error('[CARL TTS] Error:', err.message);
   }
 }
 </script>
