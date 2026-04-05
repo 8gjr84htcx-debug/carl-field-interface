@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>CARL - Field Inspection</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f5f0;
+    --header-bg: #1a1a2e;
+    --header-text: #ffffff;
+    --card-bg: #ffffff;
+    --text: #1a1a1a;
+    --text-secondary: #4a4a4a;
+    --border: #c0c0c0;
+    --accent: #1a1a2e;
+    --accent-hover: #2d2d4e;
+    --confirmed: #1b6e2a;
+    --challenged: #b8860b;
+    --insufficient: #a02020;
+    --parametric: #8b4513;
+    --label: #555555;
+    --citation-bg: #f0f0e8;
+  }
+
+  html { font-size: 18px; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--header-bg);
+    color: var(--header-text);
+    padding: 14px 20px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  header h1 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+
+  header span {
+    font-size: 0.85rem;
+    opacity: 0.7;
+    font-weight: 400;
+  }
+
+  main {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px 16px 60px;
+  }
+
+  .section-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--label);
+    margin-bottom: 6px;
+  }
+
+  textarea, input[type="password"] {
+    width: 100%;
+    padding: 14px;
+    font-size: 1.05rem;
+    font-family: inherit;
+    line-height: 1.5;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--text);
+    -webkit-appearance: none;
+  }
+
+  textarea {
+    min-height: 130px;
+    resize: vertical;
+  }
+
+  textarea:focus, input[type="password"]:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(26,26,46,0.15);
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: 700;
+    padding: 14px 28px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+    -webkit-appearance: none;
+  }
+
+  .btn-submit {
+    background: var(--accent);
+    color: #fff;
+    flex: 1;
+    letter-spacing: 0.04em;
+  }
+
+  .btn-submit:hover { background: var(--accent-hover); }
+  .btn-submit:active { transform: scale(0.98); }
+  .btn-submit:disabled {
+    background: #888;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-clear {
+    background: #e0e0e0;
+    color: var(--text);
+    padding: 14px 20px;
+  }
+
+  .btn-clear:hover { background: #d0d0d0; }
+
+  /* Auth screen */
+  .auth-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 80vh;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .auth-screen h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .auth-screen .subtitle {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 30px;
+  }
+
+  .auth-box {
+    width: 100%;
+    max-width: 360px;
+  }
+
+  .auth-box .section-label {
+    text-align: left;
+  }
+
+  .auth-error {
+    display: none;
+    color: var(--insufficient);
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-top: 10px;
+  }
+
+  .auth-error.visible { display: block; }
+
+  .app-content { display: none; }
+  .app-content.visible { display: block; }
+
+  /* Loading */
+  .loading {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+    font-size: 1rem;
+  }
+
+  .loading.visible { display: flex; }
+
+  .spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Error */
+  .error-msg {
+    display: none;
+    background: #fdecea;
+    border: 2px solid #d32f2f;
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-top: 20px;
+    color: #b71c1c;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  .error-msg.visible { display: block; }
+
+  /* Results */
+  .results {
+    display: none;
+    margin-top: 24px;
+  }
+
+  .results.visible { display: block; }
+
+  .result-card {
+    background: var(--card-bg);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    background: var(--header-bg);
+    color: var(--header-text);
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .result-header h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+
+  .eval-badge {
+    font-size: 0.85rem;
+    font-weight: 800;
+    padding: 4px 14px;
+    border-radius: 4px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .eval-CONFIRMED { background: var(--confirmed); color: #fff; }
+  .eval-CHALLENGED { background: var(--challenged); color: #fff; }
+  .eval-INSUFFICIENT { background: var(--insufficient); color: #fff; }
+
+  .result-body { padding: 16px 18px; }
+
+  .field {
+    padding: 10px 0;
+    border-bottom: 1px solid #e8e8e8;
+  }
+
+  .field:last-child { border-bottom: none; }
+
+  .field-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--label);
+    margin-bottom: 3px;
+  }
+
+  .field-value {
+    font-size: 1rem;
+    color: var(--text);
+    word-break: break-word;
+  }
+
+  .field-value.mono {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 0.92rem;
+  }
+
+  .metrics-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+  }
+
+  .metrics-row .field {
+    text-align: center;
+    border-bottom: none;
+    border-right: 1px solid #e8e8e8;
+    padding: 12px 8px;
+  }
+
+  .metrics-row .field:last-child { border-right: none; }
+
+  .metrics-row .field-value {
+    font-size: 1.3rem;
+    font-weight: 800;
+  }
+
+  .confidence-high { color: var(--confirmed); }
+  .confidence-mid { color: var(--challenged); }
+  .confidence-low { color: var(--insufficient); }
+
+  .provenance { font-weight: 700; }
+  .prov-loop { color: var(--confirmed); }
+  .prov-parametric { color: var(--parametric); }
+
+  /* Citations list */
+  .citations-section { margin-top: 16px; }
+
+  .citation-item {
+    background: var(--citation-bg);
+    border: 1px solid #d8d8d0;
+    border-radius: 5px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+
+  .citation-item:last-child { margin-bottom: 0; }
+
+  .citation-source {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .citation-text {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.45;
+  }
+
+  .timestamp {
+    font-size: 0.75rem;
+    color: var(--label);
+    text-align: right;
+    padding-top: 8px;
+  }
+
+  @media (max-width: 500px) {
+    html { font-size: 17px; }
+    header h1 { font-size: 1.5rem; }
+    header span { display: none; }
+    .auth-screen h1 { font-size: 1.8rem; }
+    .metrics-row { grid-template-columns: 1fr; }
+    .metrics-row .field {
+      border-right: none;
+      border-bottom: 1px solid #e8e8e8;
+      text-align: left;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- Auth Screen -->
+<div class="auth-screen" id="authScreen">
+  <h1>CARL</h1>
+  <div class="subtitle">Construction Assistance and Reference Library</div>
+  <div class="auth-box">
+    <div class="section-label">Authenticate</div>
+    <input type="password" id="passwordInput" placeholder="Enter access code..." autocomplete="off">
+    <div class="btn-row">
+      <button class="btn-submit" onclick="authenticate()">AUTHENTICATE</button>
+    </div>
+    <div class="auth-error" id="authError">Invalid access code. Try again.</div>
+  </div>
+</div>
+
+<!-- App Content (hidden until authenticated) -->
+<div class="app-content" id="appContent">
+
+<header>
+  <h1>CARL</h1>
+  <span>Construction Assistance and Reference Library</span>
+</header>
+
+<main>
+  <div style="margin-bottom: 20px;">
+    <div class="section-label">Field Observation</div>
+    <textarea id="observation" placeholder="Enter field observation..." autocomplete="off" spellcheck="true"></textarea>
+    <div class="btn-row">
+      <button class="btn-submit" id="submitBtn" onclick="submitObservation()">SUBMIT</button>
+      <button class="btn-clear" onclick="clearAll()">CLEAR</button>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <span>Querying NotebookLM and evaluating citations...</span>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div class="results" id="results">
+    <div class="section-label">Evaluation Result</div>
+    <div class="result-card">
+      <div class="result-header">
+        <h2>AF IMT 1477 — Page 2 Entry</h2>
+        <span class="eval-badge" id="evalBadge"></span>
+      </div>
+      <div class="result-body">
+        <div class="field">
+          <div class="field-label">Discipline</div>
+          <div class="field-value" id="rDiscipline"></div>
+        </div>
+        <div class="field">
+          <div class="field-label">Non-Conformance Description</div>
+          <div class="field-value" id="rDescription"></div>
+        </div>
+        <div class="field">
+          <div class="field-label">Primary Regulatory Citation</div>
+          <div class="field-value mono" id="rCitation"></div>
+        </div>
+
+        <div class="metrics-row">
+          <div class="field">
+            <div class="field-label">Confidence</div>
+            <div class="field-value" id="rConfidence"></div>
+          </div>
+          <div class="field">
+            <div class="field-label">Applicability</div>
+            <div class="field-value" id="rApplicability"></div>
+          </div>
+          <div class="field">
+            <div class="field-label">Provenance</div>
+            <div class="field-value provenance" id="rProvenance"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Evaluation Rationale</div>
+          <div class="field-value" id="rRationale"></div>
+        </div>
+        <div class="field">
+          <div class="field-label">Corrective Action Required</div>
+          <div class="field-value" id="rAction"></div>
+        </div>
+
+        <div class="citations-section" id="citationsSection">
+          <div class="field-label">Retrieved Citations</div>
+          <div id="citationsList"></div>
+        </div>
+
+        <div class="timestamp" id="rTimestamp"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+</div>
+
+<script>
+var WEBHOOK_URL = 'https://gbishop524.app.n8n.cloud/webhook/carl-verify';
+var ACCESS_CODE = 'CARL2026';
+
+function authenticate() {
+  var input = document.getElementById('passwordInput');
+  var error = document.getElementById('authError');
+  if (input.value === ACCESS_CODE) {
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('appContent').classList.add('visible');
+    document.getElementById('observation').focus();
+  } else {
+    error.classList.add('visible');
+    input.value = '';
+    input.focus();
+  }
+}
+
+document.getElementById('passwordInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    authenticate();
+  }
+});
+
+async function submitObservation() {
+  var textarea = document.getElementById('observation');
+  var text = textarea.value.trim();
+  if (!text) { textarea.focus(); return; }
+
+  var btn = document.getElementById('submitBtn');
+  var loading = document.getElementById('loading');
+  var errorMsg = document.getElementById('errorMsg');
+  var results = document.getElementById('results');
+
+  btn.disabled = true;
+  loading.classList.add('visible');
+  errorMsg.classList.remove('visible');
+  results.classList.remove('visible');
+
+  try {
+    var controller = new AbortController();
+    var timeout = setTimeout(function() { controller.abort(); }, 180000);
+
+    var resp = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ observation: text }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeout);
+
+    if (!resp.ok) {
+      throw new Error('Webhook returned HTTP ' + resp.status);
+    }
+
+    var data = await resp.json();
+
+    if (data.error && !data.discipline) {
+      throw new Error(data.error);
+    }
+
+    renderResults(data);
+  } catch (err) {
+    var msg = 'Request failed: ';
+    if (err.name === 'AbortError') {
+      msg += 'Request timed out (180s). The server may be busy.';
+    } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      msg += 'Unable to reach the CARL webhook. Check your network connection.';
+    } else {
+      msg += err.message;
+    }
+    errorMsg.textContent = msg;
+    errorMsg.classList.add('visible');
+  } finally {
+    btn.disabled = false;
+    loading.classList.remove('visible');
+  }
+}
+
+function renderResults(d) {
+  var results = document.getElementById('results');
+
+  var badge = document.getElementById('evalBadge');
+  var evalType = d.citation_evaluation || 'UNKNOWN';
+  badge.textContent = evalType;
+  badge.className = 'eval-badge eval-' + evalType;
+
+  document.getElementById('rDiscipline').textContent = d.discipline || '—';
+  document.getElementById('rDescription').textContent = d.non_conformance_description || '—';
+  document.getElementById('rCitation').textContent = d.primary_regulatory_citation || '—';
+
+  var conf = document.getElementById('rConfidence');
+  var score = d.confidence_score;
+  conf.textContent = score != null ? score.toFixed(2) : '—';
+  conf.className = 'field-value';
+  if (score >= 0.90) conf.classList.add('confidence-high');
+  else if (score >= 0.60) conf.classList.add('confidence-mid');
+  else if (score != null) conf.classList.add('confidence-low');
+
+  document.getElementById('rApplicability').textContent = d.applicability || '—';
+
+  var prov = document.getElementById('rProvenance');
+  prov.textContent = d.provenance || '—';
+  prov.className = 'field-value provenance';
+  if (d.provenance === 'LOOP CONFIRMED') prov.classList.add('prov-loop');
+  else if (d.provenance && d.provenance.includes('PARAMETRIC')) prov.classList.add('prov-parametric');
+
+  document.getElementById('rRationale').textContent = d.evaluation_rationale || '—';
+  document.getElementById('rAction').textContent = d.corrective_action_required || '—';
+
+  var citList = document.getElementById('citationsList');
+  var citSection = document.getElementById('citationsSection');
+  citList.innerHTML = '';
+  var citations = d.retrieved_citations || [];
+
+  if (citations.length === 0) {
+    citSection.style.display = 'none';
+  } else {
+    citSection.style.display = 'block';
+    citations.forEach(function(c) {
+      var item = document.createElement('div');
+      item.className = 'citation-item';
+
+      var docName = c.sourceName || c.standard || '';
+      var section = c.section || '';
+      var source = docName && section ? docName + ' ' + section : docName || section || 'Unknown Source';
+      var text = c.sourceText || c.relevance || '';
+
+      item.innerHTML =
+        '<div class="citation-source">' + escapeHtml(source) + '</div>' +
+        '<div class="citation-text">' + escapeHtml(text.substring(0, 400)) +
+        (text.length > 400 ? '...' : '') + '</div>';
+
+      citList.appendChild(item);
+    });
+  }
+
+  document.getElementById('rTimestamp').textContent =
+    d.processed_at ? 'Processed: ' + new Date(d.processed_at).toLocaleString() : '';
+
+  results.classList.add('visible');
+  results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function clearAll() {
+  document.getElementById('observation').value = '';
+  document.getElementById('results').classList.remove('visible');
+  document.getElementById('errorMsg').classList.remove('visible');
+  document.getElementById('observation').focus();
+}
+
+document.getElementById('observation').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    submitObservation();
+  }
+});
+</script>
+
+</body>
+</html>
