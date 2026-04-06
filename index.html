@@ -572,8 +572,19 @@
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 12px 14px;
     margin-bottom: 8px;
+    overflow: hidden;
+  }
+
+  .log-entry-summary {
+    padding: 12px 14px;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .log-entry-summary:hover {
+    background: #f5f3ed;
   }
 
   .log-entry-header {
@@ -586,11 +597,25 @@
   }
 
   .log-entry-disc {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 0.78rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--accent);
+  }
+
+  .log-expand-arrow {
+    display: inline-block;
+    font-size: 0.6rem;
+    color: var(--label);
+    transition: transform 0.2s ease;
+  }
+
+  .log-entry.expanded .log-expand-arrow {
+    transform: rotate(90deg);
   }
 
   .log-entry-prov {
@@ -646,6 +671,78 @@
   .log-entry-time {
     font-size: 0.72rem;
     color: var(--label);
+  }
+
+  .log-entry-detail {
+    display: none;
+    border-top: 1px solid var(--border);
+    padding: 14px;
+    background: #faf9f6;
+  }
+
+  .log-entry.expanded .log-entry-detail {
+    display: block;
+  }
+
+  .log-detail-field {
+    padding: 8px 0;
+    border-bottom: 1px solid #e8e5de;
+  }
+
+  .log-detail-field:last-child { border-bottom: none; }
+
+  .log-detail-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--label);
+    margin-bottom: 2px;
+  }
+
+  .log-detail-value {
+    font-size: 0.9rem;
+    color: var(--text);
+    word-break: break-word;
+  }
+
+  .log-detail-cite {
+    background: var(--citation-bg);
+    border: 1px solid var(--citation-border);
+    border-left: 3px solid var(--gold);
+    border-radius: 3px;
+    padding: 10px 12px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+  }
+
+  .log-detail-cite:last-child { margin-bottom: 0; }
+
+  .log-detail-cite-source {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gold);
+    margin-bottom: 3px;
+  }
+
+  .log-detail-cite-text {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+
+  .log-detail-indicator {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: var(--accent);
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   .log-loading {
@@ -1294,7 +1391,7 @@ async function loadDailyLog() {
     if (entries.length === 0) {
       html += '<div class="log-loading">No entries for today.</div>';
     } else {
-      entries.forEach(function(e) {
+      entries.forEach(function(e, idx) {
         var provClass = 'log-prov-other';
         var prov = e.provenance || '';
         var citeEval = e.citation_evaluation || '';
@@ -1304,13 +1401,17 @@ async function loadDailyLog() {
         else if (prov.includes('PARAMETRIC')) provClass = 'log-prov-parametric';
         else if (prov.includes('TIEBREAKER')) provClass = 'log-prov-dual';
 
-        html += '<div class="log-entry">';
+        var entryId = 'logEntry' + idx;
+        html += '<div class="log-entry" id="' + entryId + '">';
+
+        // Compact summary (always visible)
+        html += '<div class="log-entry-summary" onclick="toggleLogEntry(\'' + entryId + '\')">';
         html += '<div class="log-entry-header">';
-        html += '<span class="log-entry-disc">' + escapeHtml(e.discipline) + '</span>';
+        html += '<span class="log-entry-disc"><span class="log-expand-arrow">&#x25B6;</span> ' + escapeHtml(e.discipline) + '</span>';
         html += '<span style="display:flex;align-items:center;gap:6px;">';
         html += '<span class="log-entry-prov ' + provClass + '">' + escapeHtml(prov) + '</span>';
         if (e.processed_at) {
-          html += '<button class="log-entry-delete" onclick="deleteLogEntry(\'' + escapeHtml(e.processed_at) + '\')" title="Delete entry">&times;</button>';
+          html += '<button class="log-entry-delete" onclick="event.stopPropagation();deleteLogEntry(\'' + escapeHtml(e.processed_at) + '\')" title="Delete entry">&times;</button>';
         }
         html += '</span>';
         html += '</div>';
@@ -1320,6 +1421,82 @@ async function loadDailyLog() {
         }
         html += '<div class="log-entry-time">' + escapeHtml(e.entry_time || '') + ' &middot; Confidence: ' + (e.confidence_score != null ? e.confidence_score.toFixed(2) : '?') + '</div>';
         html += '</div>';
+
+        // Expanded detail
+        html += '<div class="log-entry-detail">';
+
+        // Full description
+        var descLabel = citeEval === 'COMPLIANT' ? 'Compliance Observation' :
+                        citeEval === 'CONFIRMED' ? 'Non-Conformance Description' :
+                        citeEval === 'CHALLENGED' ? 'Field Observation' : 'Observation Summary';
+        var descText = e.non_conformance_description || e.observation_summary || e.observation_text || '';
+        if (descText) {
+          html += '<div class="log-detail-field">';
+          html += '<div class="log-detail-label">' + escapeHtml(descLabel) + '</div>';
+          html += '<div class="log-detail-value">' + escapeHtml(descText) + '</div>';
+          html += '</div>';
+        }
+
+        // Evaluation rationale
+        if (e.evaluation_rationale) {
+          html += '<div class="log-detail-field">';
+          html += '<div class="log-detail-label">Evaluation Rationale</div>';
+          html += '<div class="log-detail-value">' + escapeHtml(e.evaluation_rationale) + '</div>';
+          html += '</div>';
+        }
+
+        // Additional regulatory citations with verification badges
+        var addCits = e.additional_regulatory_citations || [];
+        if (addCits.length > 0) {
+          html += '<div class="log-detail-field">';
+          html += '<div class="log-detail-label">Additional Regulatory Citations</div>';
+          addCits.forEach(function(c) {
+            html += '<div class="log-detail-cite">';
+            var src = (c.sourceName || 'Unknown') + ' ' + (c.section || '');
+            var vstatus = c.verification_status || '';
+            var vbadgeClass = vstatus === 'DUAL CONFIRMED' ? 'badge-dual' :
+                              vstatus === 'TRIPLE CONFIRMED' ? 'badge-triple' : 'badge-ref';
+            var vconf = (typeof c.verification_confidence === 'number' && c.verification_confidence > 0) ? ' ' + c.verification_confidence.toFixed(2) : '';
+            var vbadge = vstatus ? ' <span class="verification-badge ' + vbadgeClass + '">' + escapeHtml(vstatus) + vconf + '</span>' : '';
+            html += '<div class="log-detail-cite-source">' + escapeHtml(src.trim()) + vbadge + '</div>';
+            if (c.requirement) {
+              html += '<div class="log-detail-cite-text">' + escapeHtml(c.requirement) + '</div>';
+            }
+            html += '</div>';
+          });
+          html += '</div>';
+        }
+
+        // Corrective action (hidden for compliant with no action needed)
+        var actionText = e.corrective_action_required || '';
+        if (actionText && !(citeEval === 'COMPLIANT' && actionText === 'None -- observation meets applicable requirements')) {
+          html += '<div class="log-detail-field">';
+          html += '<div class="log-detail-label">Corrective Action Required</div>';
+          html += '<div class="log-detail-value">' + escapeHtml(actionText) + '</div>';
+          html += '</div>';
+        }
+
+        // Applicability and image indicator row
+        var metaItems = [];
+        if (e.applicability) metaItems.push('Applicability: ' + e.applicability);
+        if (e.image_processed) metaItems.push('Photo analyzed');
+        if (metaItems.length > 0) {
+          html += '<div class="log-detail-field">';
+          html += '<div class="log-detail-value" style="font-size:0.78rem;color:var(--label);">';
+          metaItems.forEach(function(m, mi) {
+            if (mi > 0) html += ' &middot; ';
+            if (m === 'Photo analyzed') {
+              html += '<span class="log-detail-indicator">&#x1F4F7; Photo Analyzed</span>';
+            } else {
+              html += escapeHtml(m);
+            }
+          });
+          html += '</div>';
+          html += '</div>';
+        }
+
+        html += '</div>'; // .log-entry-detail
+        html += '</div>'; // .log-entry
       });
     }
 
@@ -1327,6 +1504,10 @@ async function loadDailyLog() {
   } catch (err) {
     content.innerHTML = '<div class="log-loading" style="color:var(--insufficient);">Failed to load daily log: ' + escapeHtml(err.message) + '</div>';
   }
+}
+
+function toggleLogEntry(id) {
+  document.getElementById(id).classList.toggle('expanded');
 }
 
 async function deleteLogEntry(processedAt) {
