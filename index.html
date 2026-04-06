@@ -421,6 +421,23 @@
   .prov-triple { color: var(--gold); }
   .prov-parametric { color: var(--parametric); }
 
+  /* Verification badges */
+  .verification-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  .badge-dual { background: var(--gold); color: #fff; }
+  .badge-triple { background: var(--confirmed); color: #fff; }
+  .badge-ref { background: #999; color: #fff; }
+
   /* Citations list */
   .citations-section { margin-top: 16px; }
 
@@ -689,8 +706,12 @@ function renderResults(d) {
       item.className = 'citation-item';
       var source = (c.sourceName || 'Unknown') + ' ' + (c.section || '');
       var req = c.requirement || '';
+      var status = c.verification_status || '';
+      var badgeClass = status === 'DUAL CONFIRMED' ? 'badge-dual' :
+                       status === 'TRIPLE CONFIRMED' ? 'badge-triple' : 'badge-ref';
+      var badgeHtml = status ? '<span class="verification-badge ' + badgeClass + '">' + escapeHtml(status) + '</span>' : '';
       item.innerHTML =
-        '<div class="citation-source">' + escapeHtml(source.trim()) + '</div>' +
+        '<div class="citation-source">' + escapeHtml(source.trim()) + badgeHtml + '</div>' +
         '<div class="citation-text">' + escapeHtml(req) + '</div>';
       addCitList.appendChild(item);
     });
