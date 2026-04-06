@@ -1006,7 +1006,7 @@ function renderResults(d) {
       var status = c.verification_status || '';
       var badgeClass = status === 'DUAL CONFIRMED' ? 'badge-dual' :
                        status === 'TRIPLE CONFIRMED' ? 'badge-triple' : 'badge-ref';
-      var confDisplay = (typeof c.verification_confidence === 'number' && c.verification_confidence > 0) ? ' ' + c.verification_confidence.toFixed(2) : '';
+      var confDisplay = (typeof c.verification_confidence === 'number') ? ' ' + c.verification_confidence.toFixed(2) : '';
       var badgeHtml = status ? '<span class="verification-badge ' + badgeClass + '">' + escapeHtml(status) + confDisplay + '</span>' : '';
       item.innerHTML =
         '<div class="citation-source">' + escapeHtml(source.trim()) + badgeHtml + '</div>' +
@@ -1456,7 +1456,7 @@ async function loadDailyLog() {
             var vstatus = c.verification_status || '';
             var vbadgeClass = vstatus === 'DUAL CONFIRMED' ? 'badge-dual' :
                               vstatus === 'TRIPLE CONFIRMED' ? 'badge-triple' : 'badge-ref';
-            var vconf = (typeof c.verification_confidence === 'number' && c.verification_confidence > 0) ? ' ' + c.verification_confidence.toFixed(2) : '';
+            var vconf = (typeof c.verification_confidence === 'number') ? ' ' + c.verification_confidence.toFixed(2) : '';
             var vbadge = vstatus ? ' <span class="verification-badge ' + vbadgeClass + '">' + escapeHtml(vstatus) + vconf + '</span>' : '';
             html += '<div class="log-detail-cite-source">' + escapeHtml(src.trim()) + vbadge + '</div>';
             if (c.requirement) {
