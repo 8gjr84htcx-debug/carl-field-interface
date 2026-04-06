@@ -418,6 +418,7 @@
 
   .provenance { font-weight: 700; }
   .prov-loop { color: var(--confirmed); }
+  .prov-triple { color: var(--gold); }
   .prov-parametric { color: var(--parametric); }
 
   /* Citations list */
@@ -682,7 +683,8 @@ function renderResults(d) {
   var prov = document.getElementById('rProvenance');
   prov.textContent = d.provenance || '—';
   prov.className = 'field-value provenance';
-  if (d.provenance === 'LOOP CONFIRMED') prov.classList.add('prov-loop');
+  if (d.provenance === 'TRIPLE CONFIRMED') prov.classList.add('prov-triple');
+  else if (d.provenance === 'LOOP CONFIRMED') prov.classList.add('prov-loop');
   else if (d.provenance && d.provenance.includes('PARAMETRIC')) prov.classList.add('prov-parametric');
 
   document.getElementById('rRationale').textContent = d.evaluation_rationale || '—';
@@ -888,7 +890,8 @@ async function toggleTts() {
   var discipline = d.discipline || 'unknown discipline';
   var citation = d.primary_regulatory_citation || 'no citation';
   var action = d.corrective_action_required || 'no corrective action specified';
-  var summary = 'Discipline: ' + discipline + '. Citation: ' + citation + '. Action: ' + action + '.';
+  var provNote = (d.provenance === 'TRIPLE CONFIRMED') ? ' Triple confirmed.' : '';
+  var summary = 'Discipline: ' + discipline + '. Citation: ' + citation + '. Action: ' + action + '.' + provNote;
 
   btn.classList.add('loading');
   btn.innerHTML = '&#x23F3;';
