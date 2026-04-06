@@ -538,6 +538,11 @@
           <div class="field-value mono" id="rCitation"></div>
         </div>
 
+        <div class="citations-section" id="additionalCitationsSection" style="display:none;">
+          <div class="field-label">Additional Regulatory Citations <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.68rem;color:var(--label);">(supplemental references)</span></div>
+          <div id="additionalCitationsList"></div>
+        </div>
+
         <div class="metrics-row">
           <div class="field">
             <div class="field-label">Confidence</div>
@@ -669,6 +674,27 @@ function renderResults(d) {
   document.getElementById('rDiscipline').textContent = d.discipline || '—';
   document.getElementById('rDescription').textContent = d.non_conformance_description || '—';
   document.getElementById('rCitation').textContent = d.primary_regulatory_citation || '—';
+
+  // Additional regulatory citations
+  var addCitList = document.getElementById('additionalCitationsList');
+  var addCitSection = document.getElementById('additionalCitationsSection');
+  addCitList.innerHTML = '';
+  var addCitations = d.additional_regulatory_citations || [];
+  if (addCitations.length === 0) {
+    addCitSection.style.display = 'none';
+  } else {
+    addCitSection.style.display = 'block';
+    addCitations.forEach(function(c) {
+      var item = document.createElement('div');
+      item.className = 'citation-item';
+      var source = (c.sourceName || 'Unknown') + ' ' + (c.section || '');
+      var req = c.requirement || '';
+      item.innerHTML =
+        '<div class="citation-source">' + escapeHtml(source.trim()) + '</div>' +
+        '<div class="citation-text">' + escapeHtml(req) + '</div>';
+      addCitList.appendChild(item);
+    });
+  }
 
   var conf = document.getElementById('rConfidence');
   var score = d.confidence_score;
