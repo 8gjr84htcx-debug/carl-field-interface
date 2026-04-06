@@ -555,11 +555,6 @@
           <div class="field-value mono" id="rCitation"></div>
         </div>
 
-        <div class="citations-section" id="additionalCitationsSection" style="display:none;">
-          <div class="field-label">Additional Regulatory Citations <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.68rem;color:var(--label);">(supplemental references)</span></div>
-          <div id="additionalCitationsList"></div>
-        </div>
-
         <div class="metrics-row">
           <div class="field">
             <div class="field-label">Confidence</div>
@@ -573,6 +568,11 @@
             <div class="field-label">Provenance</div>
             <div class="field-value provenance" id="rProvenance"></div>
           </div>
+        </div>
+
+        <div class="citations-section" id="additionalCitationsSection" style="display:none;">
+          <div class="field-label">Additional Regulatory Citations <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.68rem;color:var(--label);">(supplemental references)</span></div>
+          <div id="additionalCitationsList"></div>
         </div>
 
         <div class="field">
@@ -709,7 +709,8 @@ function renderResults(d) {
       var status = c.verification_status || '';
       var badgeClass = status === 'DUAL CONFIRMED' ? 'badge-dual' :
                        status === 'TRIPLE CONFIRMED' ? 'badge-triple' : 'badge-ref';
-      var badgeHtml = status ? '<span class="verification-badge ' + badgeClass + '">' + escapeHtml(status) + '</span>' : '';
+      var confDisplay = (typeof c.verification_confidence === 'number' && c.verification_confidence > 0) ? ' ' + c.verification_confidence.toFixed(2) : '';
+      var badgeHtml = status ? '<span class="verification-badge ' + badgeClass + '">' + escapeHtml(status) + confDisplay + '</span>' : '';
       item.innerHTML =
         '<div class="citation-source">' + escapeHtml(source.trim()) + badgeHtml + '</div>' +
         '<div class="citation-text">' + escapeHtml(req) + '</div>';
