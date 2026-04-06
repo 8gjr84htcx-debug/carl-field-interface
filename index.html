@@ -524,6 +524,109 @@
     padding-top: 8px;
   }
 
+  /* Daily Log */
+  .btn-dailylog {
+    background: var(--accent);
+    color: #fff;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    letter-spacing: 0.06em;
+    margin-top: 16px;
+    width: 100%;
+  }
+
+  .btn-dailylog:hover { background: var(--accent-hover); }
+
+  .daily-log { display: none; margin-top: 20px; }
+  .daily-log.visible { display: block; }
+
+  .log-summary {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--gold);
+    border-radius: 6px;
+    padding: 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+
+  .log-summary h3 {
+    font-family: Georgia, "Times New Roman", Times, serif;
+    font-size: 1.1rem;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+
+  .log-stat {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+
+  .log-stat strong { color: var(--text); }
+
+  .log-entry {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+
+  .log-entry-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .log-entry-disc {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+  }
+
+  .log-entry-prov {
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .log-prov-triple { background: var(--confirmed); color: #fff; }
+  .log-prov-dual { background: var(--gold); color: #fff; }
+  .log-prov-parametric { background: #999; color: #fff; }
+  .log-prov-other { background: var(--border); color: var(--text); }
+
+  .log-entry-obs {
+    font-size: 0.88rem;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .log-entry-cite {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  }
+
+  .log-entry-time {
+    font-size: 0.72rem;
+    color: var(--label);
+  }
+
+  .log-loading {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-secondary);
+  }
+
   @media (max-width: 500px) {
     html { font-size: 17px; }
     header h1 { font-size: 1.5rem; }
@@ -648,6 +751,13 @@
         <div class="timestamp" id="rTimestamp"></div>
       </div>
     </div>
+  </div>
+
+  <button class="btn-dailylog" onclick="loadDailyLog()">DAILY LOG</button>
+
+  <div class="daily-log" id="dailyLog">
+    <div class="section-label">Daily Log</div>
+    <div id="dailyLogContent"><div class="log-loading">Loading...</div></div>
   </div>
 </main>
 
@@ -1091,6 +1201,82 @@ async function toggleTts() {
     console.error('[CARL TTS] Error:', err.message);
     btn.classList.remove('loading');
     btn.innerHTML = '&#x1F50A;';
+  }
+}
+
+// Daily Log
+var DAILY_REPORT_URL = 'https://gbishop524.app.n8n.cloud/webhook/carl-daily-report';
+
+async function loadDailyLog() {
+  var logDiv = document.getElementById('dailyLog');
+  var content = document.getElementById('dailyLogContent');
+
+  if (logDiv.classList.contains('visible')) {
+    logDiv.classList.remove('visible');
+    return;
+  }
+
+  logDiv.classList.add('visible');
+  content.innerHTML = '<div class="log-loading">Loading daily log...</div>';
+
+  try {
+    var resp = await fetch(DAILY_REPORT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: new Date().toISOString().split('T')[0] })
+    });
+
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+
+    var html = '';
+
+    // Summary card
+    html += '<div class="log-summary">';
+    html += '<h3>Report: ' + escapeHtml(data.report_date) + '</h3>';
+    html += '<div class="log-stat"><strong>' + data.total_observations + '</strong> observations today</div>';
+
+    var disc = data.discipline_breakdown || {};
+    var discKeys = Object.keys(disc);
+    if (discKeys.length > 0) {
+      html += '<div class="log-stat">Disciplines: ' + discKeys.map(function(k) { return escapeHtml(k) + ' (' + disc[k] + ')'; }).join(', ') + '</div>';
+    }
+
+    if (data.verification_count > 0) {
+      html += '<div class="log-stat" style="color:var(--insufficient);font-weight:600;">' + data.verification_count + ' entries need manual verification (PARAMETRIC)</div>';
+    }
+    html += '</div>';
+
+    // Entries
+    var entries = data.entries || [];
+    if (entries.length === 0) {
+      html += '<div class="log-loading">No entries for today.</div>';
+    } else {
+      entries.forEach(function(e) {
+        var provClass = 'log-prov-other';
+        var prov = e.provenance || '';
+        if (prov === 'TRIPLE CONFIRMED') provClass = 'log-prov-triple';
+        else if (prov === 'DUAL CONFIRMED') provClass = 'log-prov-dual';
+        else if (prov.includes('PARAMETRIC')) provClass = 'log-prov-parametric';
+        else if (prov.includes('TIEBREAKER')) provClass = 'log-prov-dual';
+
+        html += '<div class="log-entry">';
+        html += '<div class="log-entry-header">';
+        html += '<span class="log-entry-disc">' + escapeHtml(e.discipline) + '</span>';
+        html += '<span class="log-entry-prov ' + provClass + '">' + escapeHtml(prov) + '</span>';
+        html += '</div>';
+        html += '<div class="log-entry-obs">' + escapeHtml((e.observation_text || '').substring(0, 200)) + '</div>';
+        if (e.primary_regulatory_citation) {
+          html += '<div class="log-entry-cite">' + escapeHtml(e.primary_regulatory_citation) + '</div>';
+        }
+        html += '<div class="log-entry-time">' + escapeHtml(e.entry_time || '') + ' &middot; Confidence: ' + (e.confidence_score != null ? e.confidence_score.toFixed(2) : '?') + '</div>';
+        html += '</div>';
+      });
+    }
+
+    content.innerHTML = html;
+  } catch (err) {
+    content.innerHTML = '<div class="log-loading" style="color:var(--insufficient);">Failed to load daily log: ' + escapeHtml(err.message) + '</div>';
   }
 }
 </script>
