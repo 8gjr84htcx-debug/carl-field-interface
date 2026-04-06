@@ -853,14 +853,36 @@ function clearAll() {
 function handlePhoto(input) {
   var file = input.files && input.files[0];
   if (!file) return;
+  var errorMsg = document.getElementById('errorMsg');
+  errorMsg.classList.remove('visible');
 
   var reader = new FileReader();
   reader.onload = function(e) {
-    var dataUrl = e.target.result;
-    // Strip the data:image/...;base64, prefix for the API
-    attachedPhotoBase64 = dataUrl.split(',')[1];
-    document.getElementById('photoThumb').src = dataUrl;
-    document.getElementById('photoPreview').classList.add('visible');
+    var img = new Image();
+    img.onload = function() {
+      var maxDim = 1024;
+      var w = img.width;
+      var h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      var b64 = dataUrl.split(',')[1];
+      if (b64.length > 1048576) {
+        errorMsg.textContent = 'Image too large after resizing. Please use a smaller image (under 1MB).';
+        errorMsg.classList.add('visible');
+        return;
+      }
+      attachedPhotoBase64 = b64;
+      document.getElementById('photoThumb').src = dataUrl;
+      document.getElementById('photoPreview').classList.add('visible');
+    };
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
   input.value = '';
