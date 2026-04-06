@@ -408,6 +408,7 @@
     text-transform: uppercase;
   }
 
+  .eval-COMPLIANT { background: #2e8b57; color: #fff; }
   .eval-CONFIRMED { background: var(--confirmed); color: #fff; }
   .eval-CHALLENGED { background: var(--challenged); color: #fff; }
   .eval-INSUFFICIENT { background: var(--insufficient); color: #fff; }
@@ -467,6 +468,7 @@
   .confidence-low { color: var(--insufficient); }
 
   .provenance { font-weight: 700; }
+  .prov-compliant { color: #2e8b57; }
   .prov-loop { color: var(--confirmed); }
   .prov-triple { color: var(--gold); }
   .prov-parametric { color: var(--parametric); }
@@ -599,6 +601,7 @@
     letter-spacing: 0.04em;
   }
 
+  .log-prov-compliant { background: #2e8b57; color: #fff; }
   .log-prov-triple { background: var(--confirmed); color: #fff; }
   .log-prov-dual { background: var(--gold); color: #fff; }
   .log-prov-parametric { background: #999; color: #fff; }
@@ -761,7 +764,7 @@
           <div class="field-label">Evaluation Rationale</div>
           <div class="field-value" id="rRationale"></div>
         </div>
-        <div class="field">
+        <div class="field" id="rActionField">
           <div class="field-label">Corrective Action Required</div>
           <div class="field-value" id="rAction"></div>
         </div>
@@ -878,7 +881,8 @@ function renderResults(d) {
   badge.textContent = evalType;
   badge.className = 'eval-badge eval-' + evalType;
 
-  var descLabel = evalType === 'CONFIRMED' ? 'Non-Conformance Description' :
+  var descLabel = evalType === 'COMPLIANT' ? 'Compliance Observation' :
+                  evalType === 'CONFIRMED' ? 'Non-Conformance Description' :
                   evalType === 'CHALLENGED' ? 'Field Observation' :
                   'Observation Summary';
   document.getElementById('rDescriptionLabel').textContent = descLabel;
@@ -926,12 +930,21 @@ function renderResults(d) {
   var prov = document.getElementById('rProvenance');
   prov.textContent = d.provenance || '—';
   prov.className = 'field-value provenance';
-  if (d.provenance === 'TRIPLE CONFIRMED') prov.classList.add('prov-triple');
+  if (evalType === 'COMPLIANT') prov.classList.add('prov-compliant');
+  else if (d.provenance === 'TRIPLE CONFIRMED') prov.classList.add('prov-triple');
   else if (d.provenance === 'LOOP CONFIRMED') prov.classList.add('prov-loop');
   else if (d.provenance && d.provenance.includes('PARAMETRIC')) prov.classList.add('prov-parametric');
 
   document.getElementById('rRationale').textContent = d.evaluation_rationale || '—';
-  document.getElementById('rAction').textContent = d.corrective_action_required || '—';
+
+  var actionField = document.getElementById('rActionField');
+  var actionText = d.corrective_action_required || '—';
+  if (evalType === 'COMPLIANT' && actionText === 'None -- observation meets applicable requirements') {
+    actionField.style.display = 'none';
+  } else {
+    actionField.style.display = '';
+    document.getElementById('rAction').textContent = actionText;
+  }
 
   var citList = document.getElementById('citationsList');
   var citSection = document.getElementById('citationsSection');
@@ -1283,7 +1296,9 @@ async function loadDailyLog() {
       entries.forEach(function(e) {
         var provClass = 'log-prov-other';
         var prov = e.provenance || '';
-        if (prov === 'TRIPLE CONFIRMED') provClass = 'log-prov-triple';
+        var citeEval = e.citation_evaluation || '';
+        if (citeEval === 'COMPLIANT') provClass = 'log-prov-compliant';
+        else if (prov === 'TRIPLE CONFIRMED') provClass = 'log-prov-triple';
         else if (prov === 'DUAL CONFIRMED') provClass = 'log-prov-dual';
         else if (prov.includes('PARAMETRIC')) provClass = 'log-prov-parametric';
         else if (prov.includes('TIEBREAKER')) provClass = 'log-prov-dual';
