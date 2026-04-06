@@ -604,6 +604,29 @@
   .log-prov-parametric { background: #999; color: #fff; }
   .log-prov-other { background: var(--border); color: var(--text); }
 
+  .log-entry-delete {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: #999;
+    font-size: 0.85rem;
+    line-height: 1;
+    width: 22px;
+    height: 22px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+
+  .log-entry-delete:hover {
+    background: var(--insufficient);
+    color: #fff;
+    border-color: var(--insufficient);
+  }
+
   .log-entry-obs {
     font-size: 0.88rem;
     color: var(--text);
@@ -706,7 +729,7 @@
           <div class="field-value" id="rDiscipline"></div>
         </div>
         <div class="field">
-          <div class="field-label">Non-Conformance Description</div>
+          <div class="field-label" id="rDescriptionLabel">Non-Conformance Description</div>
           <div class="field-value" id="rDescription"></div>
         </div>
         <div class="field">
@@ -855,8 +878,13 @@ function renderResults(d) {
   badge.textContent = evalType;
   badge.className = 'eval-badge eval-' + evalType;
 
+  var descLabel = evalType === 'CONFIRMED' ? 'Non-Conformance Description' :
+                  evalType === 'CHALLENGED' ? 'Field Observation' :
+                  'Observation Summary';
+  document.getElementById('rDescriptionLabel').textContent = descLabel;
+
   document.getElementById('rDiscipline').textContent = d.discipline || '—';
-  document.getElementById('rDescription').textContent = d.non_conformance_description || '—';
+  document.getElementById('rDescription').textContent = d.non_conformance_description || d.observation_summary || '—';
   document.getElementById('rCitation').textContent = d.primary_regulatory_citation || '—';
 
   // Additional regulatory citations
@@ -1263,7 +1291,12 @@ async function loadDailyLog() {
         html += '<div class="log-entry">';
         html += '<div class="log-entry-header">';
         html += '<span class="log-entry-disc">' + escapeHtml(e.discipline) + '</span>';
+        html += '<span style="display:flex;align-items:center;gap:6px;">';
         html += '<span class="log-entry-prov ' + provClass + '">' + escapeHtml(prov) + '</span>';
+        if (e.processed_at) {
+          html += '<button class="log-entry-delete" onclick="deleteLogEntry(\'' + escapeHtml(e.processed_at) + '\')" title="Delete entry">&times;</button>';
+        }
+        html += '</span>';
         html += '</div>';
         html += '<div class="log-entry-obs">' + escapeHtml((e.observation_text || '').substring(0, 200)) + '</div>';
         if (e.primary_regulatory_citation) {
@@ -1277,6 +1310,29 @@ async function loadDailyLog() {
     content.innerHTML = html;
   } catch (err) {
     content.innerHTML = '<div class="log-loading" style="color:var(--insufficient);">Failed to load daily log: ' + escapeHtml(err.message) + '</div>';
+  }
+}
+
+async function deleteLogEntry(processedAt) {
+  if (!confirm('Delete this entry?')) return;
+
+  var content = document.getElementById('dailyLogContent');
+  try {
+    var resp = await fetch(DAILY_REPORT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', processed_at: processedAt })
+    });
+
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    if (!data.success) throw new Error(data.error || 'Delete failed');
+
+    // Force refresh by removing visible class and re-triggering
+    document.getElementById('dailyLog').classList.remove('visible');
+    loadDailyLog();
+  } catch (err) {
+    alert('Failed to delete entry: ' + err.message);
   }
 }
 </script>
