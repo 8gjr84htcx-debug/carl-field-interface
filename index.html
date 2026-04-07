@@ -1250,9 +1250,9 @@ function handlePhoto(input) {
       }
       attachedPhotoBase64 = b64;
 
-      // Generate 200x200 thumbnail for storage
+      // Generate 600x600 image for storage and lightbox
       var tw = img.width, th = img.height;
-      var thumbMax = 200;
+      var thumbMax = 600;
       if (tw > thumbMax || th > thumbMax) {
         if (tw > th) { th = Math.round(th * thumbMax / tw); tw = thumbMax; }
         else { tw = Math.round(tw * thumbMax / th); th = thumbMax; }
@@ -1261,7 +1261,7 @@ function handlePhoto(input) {
       thumbCanvas.width = tw;
       thumbCanvas.height = th;
       thumbCanvas.getContext('2d').drawImage(img, 0, 0, tw, th);
-      attachedThumbBase64 = thumbCanvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+      attachedThumbBase64 = thumbCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 
       document.getElementById('photoThumb').src = dataUrl;
       document.getElementById('photoPreview').classList.add('visible');
