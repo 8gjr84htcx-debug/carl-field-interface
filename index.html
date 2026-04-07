@@ -52,13 +52,14 @@
     color: var(--header-text);
     padding: 16px 24px;
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 16px;
     position: sticky;
     top: 0;
     z-index: 100;
     border-bottom: 3px solid var(--gold);
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    flex-wrap: wrap;
   }
 
   header h1 {
@@ -75,6 +76,61 @@
     letter-spacing: 0.04em;
     color: #d0ccc0;
   }
+
+  .status-bar {
+    display: flex;
+    gap: 12px;
+    margin-left: auto;
+    align-items: center;
+  }
+
+  .status-dot-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+    cursor: default;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #666;
+    flex-shrink: 0;
+  }
+
+  .status-dot.green { background: #4caf50; box-shadow: 0 0 4px rgba(76,175,80,0.5); }
+  .status-dot.yellow { background: #ffc107; box-shadow: 0 0 4px rgba(255,193,7,0.5); }
+  .status-dot.red { background: #f44336; box-shadow: 0 0 4px rgba(244,67,54,0.5); }
+
+  .status-label {
+    font-size: 0.58rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.6);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .status-dot-wrap .status-tooltip {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 6px;
+    background: #222;
+    color: #ddd;
+    font-size: 0.65rem;
+    padding: 4px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+    z-index: 200;
+    pointer-events: none;
+  }
+
+  .status-dot-wrap:hover .status-tooltip { display: block; }
 
   main {
     max-width: 800px;
@@ -881,6 +937,23 @@
 <header>
   <h1>CARL</h1>
   <span>Compliance Assistance and Regulatory Liaison</span>
+  <div class="status-bar">
+    <div class="status-dot-wrap" id="statusDocLib">
+      <div class="status-dot" id="dotDocLib"></div>
+      <span class="status-label">Doc Library</span>
+      <span class="status-tooltip" id="tipDocLib">Awaiting first query</span>
+    </div>
+    <div class="status-dot-wrap" id="statusEval">
+      <div class="status-dot" id="dotEval"></div>
+      <span class="status-label">Eval Engine</span>
+      <span class="status-tooltip" id="tipEval">Awaiting first query</span>
+    </div>
+    <div class="status-dot-wrap" id="statusCrossCheck">
+      <div class="status-dot" id="dotCrossCheck"></div>
+      <span class="status-label">CrossCheck</span>
+      <span class="status-tooltip" id="tipCrossCheck">Awaiting first query</span>
+    </div>
+  </div>
 </header>
 
 <main>
@@ -958,8 +1031,7 @@
           <div class="field-value" id="rAction"></div>
         </div>
 
-        <div class="citations-section" id="citationsSection">
-          <div class="field-label">Retrieved Citations</div>
+        <div class="citations-section" id="citationsSection" style="display:none;">
           <div id="citationsList"></div>
         </div>
 
@@ -1157,32 +1229,8 @@ function renderResults(d) {
     document.getElementById('rAction').textContent = actionText;
   }
 
-  var citList = document.getElementById('citationsList');
-  var citSection = document.getElementById('citationsSection');
-  citList.innerHTML = '';
-  var citations = d.retrieved_citations || [];
-
-  if (citations.length === 0) {
-    citSection.style.display = 'none';
-  } else {
-    citSection.style.display = 'block';
-    citations.forEach(function(c) {
-      var item = document.createElement('div');
-      item.className = 'citation-item';
-
-      var docName = c.sourceName || c.standard || '';
-      var section = c.section || '';
-      var source = docName && section ? docName + ' ' + section : docName || section || 'Unknown Source';
-      var text = c.sourceText || c.relevance || '';
-
-      item.innerHTML =
-        '<div class="citation-source">' + escapeHtml(source) + '</div>' +
-        '<div class="citation-text">' + escapeHtml(text.substring(0, 400)) +
-        (text.length > 400 ? '...' : '') + '</div>';
-
-      citList.appendChild(item);
-    });
-  }
+  // Update system status lights
+  updateStatusLights(d);
 
   var photoField = document.getElementById('rPhotoField');
   if (d.image_thumbnail) {
@@ -1671,6 +1719,53 @@ async function deleteLogEntry(processedAt) {
     loadDailyLog();
   } catch (err) {
     alert('Failed to delete entry: ' + err.message);
+  }
+}
+
+// System status lights
+function updateStatusLights(d) {
+  var dotDoc = document.getElementById('dotDocLib');
+  var tipDoc = document.getElementById('tipDocLib');
+  var dotEval = document.getElementById('dotEval');
+  var tipEval = document.getElementById('tipEval');
+  var dotCC = document.getElementById('dotCrossCheck');
+  var tipCC = document.getElementById('tipCrossCheck');
+
+  // Doc Library: green if NLM citations present, red if parametric
+  var prov = d.provenance || '';
+  var hasCitations = (d.retrieved_citations || []).length > 0;
+  var isParametric = prov.includes('PARAMETRIC') || (d.primary_citation_source === 'parametric');
+  if (hasCitations) {
+    dotDoc.className = 'status-dot green';
+    tipDoc.textContent = 'NotebookLM returned ' + d.retrieved_citations.length + ' citations';
+  } else if (isParametric) {
+    dotDoc.className = 'status-dot red';
+    tipDoc.textContent = 'NotebookLM unavailable — using parametric knowledge';
+  } else {
+    dotDoc.className = 'status-dot yellow';
+    tipDoc.textContent = 'No citations retrieved';
+  }
+
+  // Eval Engine: always green when a result came back
+  dotEval.className = 'status-dot green';
+  tipEval.textContent = (d.citation_evaluation || 'Unknown') + ' — confidence ' + (d.confidence_score != null ? d.confidence_score.toFixed(2) : '?');
+
+  // CrossCheck: green if passed with high confidence, yellow if unverified/low, red if unavailable
+  var ccConf = d.crosscheck_confidence;
+  var ccConfirmed = d.crosscheck_confirmed;
+  var gemUnavail = d.gemini_unavailable === true;
+  if (gemUnavail) {
+    dotCC.className = 'status-dot red';
+    tipCC.textContent = 'Gemini cross-check unavailable';
+  } else if (ccConfirmed && typeof ccConf === 'number' && ccConf > 0.75) {
+    dotCC.className = 'status-dot green';
+    tipCC.textContent = 'Cross-check passed — confidence ' + ccConf.toFixed(2);
+  } else if (typeof ccConf === 'number') {
+    dotCC.className = 'status-dot yellow';
+    tipCC.textContent = 'Cross-check low confidence — ' + ccConf.toFixed(2);
+  } else {
+    dotCC.className = 'status-dot yellow';
+    tipCC.textContent = 'Cross-check status unknown';
   }
 }
 
