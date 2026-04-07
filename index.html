@@ -767,6 +767,81 @@
     color: var(--text-secondary);
   }
 
+  /* Lightbox */
+  .lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0,0,0,0.88);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .lightbox.visible { display: flex; }
+
+  .lightbox-inner {
+    position: relative;
+    max-width: 95vw;
+    max-height: 90vh;
+  }
+
+  .lightbox-inner img {
+    max-width: 95vw;
+    max-height: 85vh;
+    border-radius: 6px;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+  }
+
+  .lightbox-controls {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    display: flex;
+    gap: 10px;
+  }
+
+  .lightbox-btn {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: 0.04em;
+  }
+
+  .lightbox-btn:hover { background: rgba(255,255,255,0.25); }
+
+  /* Export button */
+  .btn-export {
+    background: var(--gold);
+    color: #fff;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    letter-spacing: 0.06em;
+    margin-top: 16px;
+    width: 100%;
+  }
+
+  .btn-export:hover { background: var(--gold-hover); }
+
+  /* Print styles for shift report */
+  @media print {
+    body * { visibility: hidden; }
+    #shiftReport, #shiftReport * { visibility: visible; }
+    #shiftReport {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+    }
+  }
+
   @media (max-width: 500px) {
     html { font-size: 17px; }
     header h1 { font-size: 1.5rem; }
@@ -890,7 +965,7 @@
 
         <div class="field" id="rPhotoField" style="display:none;">
           <div class="field-label">Site Photo</div>
-          <div class="field-value"><img id="rPhoto" class="result-thumbnail" src="" alt="Site photo"></div>
+          <div class="field-value"><img id="rPhoto" class="result-thumbnail" src="" alt="Site photo" style="cursor:pointer;" onclick="openLightbox(this.src)"></div>
         </div>
 
         <div class="timestamp" id="rTimestamp"></div>
@@ -898,13 +973,28 @@
     </div>
   </div>
 
-  <button class="btn-dailylog" onclick="loadDailyLog()">DAILY LOG</button>
+  <div style="display:flex;gap:10px;">
+    <button class="btn-dailylog" style="flex:1;" onclick="loadDailyLog()">DAILY LOG</button>
+    <button class="btn-export" style="flex:1;" onclick="exportShiftReport()">EXPORT SHIFT REPORT</button>
+  </div>
 
   <div class="daily-log" id="dailyLog">
     <div class="section-label">Daily Log</div>
     <div id="dailyLogContent"><div class="log-loading">Loading...</div></div>
   </div>
 </main>
+
+<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+  <div class="lightbox-inner">
+    <div class="lightbox-controls">
+      <button class="lightbox-btn" id="lightboxDownload" onclick="downloadLightboxImage(event)">&#x2B07; SAVE</button>
+      <button class="lightbox-btn" onclick="closeLightbox(event, true)">&times; CLOSE</button>
+    </div>
+    <img id="lightboxImg" src="" alt="Full size photo">
+  </div>
+</div>
+
+<div id="shiftReport" style="display:none;"></div>
 
 </div>
 
@@ -1527,7 +1617,7 @@ async function loadDailyLog() {
         if (e.image_thumbnail) {
           html += '<div class="log-detail-field">';
           html += '<div class="log-detail-label">Site Photo</div>';
-          html += '<img class="log-detail-thumbnail" src="data:image/jpeg;base64,' + e.image_thumbnail + '" alt="Site photo">';
+          html += '<img class="log-detail-thumbnail" src="data:image/jpeg;base64,' + e.image_thumbnail + '" alt="Site photo" style="cursor:pointer;" onclick="openLightbox(this.src)">';
           html += '</div>';
         }
 
@@ -1581,6 +1671,215 @@ async function deleteLogEntry(processedAt) {
     loadDailyLog();
   } catch (err) {
     alert('Failed to delete entry: ' + err.message);
+  }
+}
+
+// Lightbox
+var lightboxMeta = {};
+
+function openLightbox(src) {
+  var lb = document.getElementById('lightbox');
+  document.getElementById('lightboxImg').src = src;
+  lightboxMeta.src = src;
+  lb.classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox(e, force) {
+  if (!force && e.target !== document.getElementById('lightbox')) return;
+  document.getElementById('lightbox').classList.remove('visible');
+  document.body.style.overflow = '';
+}
+
+function downloadLightboxImage(e) {
+  e.stopPropagation();
+  var src = lightboxMeta.src || '';
+  var now = new Date();
+  var dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
+  var timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '');
+  var disc = (lastResultData && lastResultData.discipline) ? lastResultData.discipline.replace(/\s+/g, '_') : 'observation';
+  var filename = 'CARL_' + dateStr + '_' + timeStr + '_' + disc + '.jpg';
+  var a = document.createElement('a');
+  a.href = src;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// Shift Report Export
+async function exportShiftReport() {
+  var today = new Date().toISOString().split('T')[0];
+  var reportDiv = document.getElementById('shiftReport');
+
+  try {
+    var resp = await fetch(DAILY_REPORT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: today })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+
+    var entries = data.entries || [];
+    var now = new Date();
+    var tzName = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    var dateDisplay = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    var h = '';
+
+    // Print-optimized styles
+    h += '<style>';
+    h += '@page { size: letter; margin: 0.75in; }';
+    h += '#shiftReport { font-family: Georgia, "Times New Roman", serif; color: #1a1a1a; font-size: 11pt; line-height: 1.5; }';
+    h += '.sr-cover { page-break-after: always; text-align: center; padding-top: 2in; }';
+    h += '.sr-cover h1 { font-size: 36pt; letter-spacing: 0.15em; color: #1c2b4a; margin-bottom: 4px; }';
+    h += '.sr-cover .sr-subtitle { font-size: 10pt; letter-spacing: 0.1em; text-transform: uppercase; color: #777; margin-bottom: 40px; }';
+    h += '.sr-cover .sr-date { font-size: 14pt; color: #333; margin-bottom: 30px; }';
+    h += '.sr-cover .sr-meta { font-size: 10pt; color: #555; margin-bottom: 6px; }';
+    h += '.sr-cover .sr-field { border-bottom: 1px solid #ccc; display: inline-block; min-width: 250px; padding: 2px 0; margin-left: 6px; }';
+    h += '.sr-summary { margin-bottom: 20px; padding: 12px 16px; border: 1px solid #ccc; border-radius: 4px; background: #f8f6f0; }';
+    h += '.sr-summary h3 { font-size: 12pt; margin-bottom: 6px; }';
+    h += '.sr-summary-stat { font-size: 10pt; color: #555; }';
+    h += '.sr-entry { page-break-inside: avoid; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 14px; overflow: hidden; }';
+    h += '.sr-entry-header { background: #1c2b4a; color: #fff; padding: 8px 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }';
+    h += '.sr-entry-header h4 { font-size: 11pt; margin: 0; }';
+    h += '.sr-badge { font-size: 8pt; font-weight: 800; padding: 2px 10px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.05em; }';
+    h += '.sr-badge-COMPLIANT { background: #2e8b57; color: #fff; }';
+    h += '.sr-badge-CONFIRMED { background: #1b6e2a; color: #fff; }';
+    h += '.sr-badge-CHALLENGED { background: #8b6914; color: #fff; }';
+    h += '.sr-badge-INSUFFICIENT { background: #a02020; color: #fff; }';
+    h += '.sr-entry-body { padding: 10px 14px; }';
+    h += '.sr-field-row { padding: 6px 0; border-bottom: 1px solid #eee; }';
+    h += '.sr-field-row:last-child { border-bottom: none; }';
+    h += '.sr-label { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin-bottom: 2px; }';
+    h += '.sr-value { font-size: 10pt; }';
+    h += '.sr-cite-block { background: #f5f3ed; border-left: 3px solid #8b6914; padding: 6px 10px; margin: 4px 0; border-radius: 2px; }';
+    h += '.sr-cite-src { font-size: 8pt; font-weight: 700; text-transform: uppercase; color: #8b6914; }';
+    h += '.sr-cite-text { font-size: 9pt; color: #555; }';
+    h += '.sr-vbadge { font-size: 7pt; font-weight: 800; padding: 1px 6px; border-radius: 2px; text-transform: uppercase; margin-left: 6px; }';
+    h += '.sr-vb-dual { background: #8b6914; color: #fff; }';
+    h += '.sr-vb-triple { background: #1b6e2a; color: #fff; }';
+    h += '.sr-vb-ref { background: #999; color: #fff; }';
+    h += '.sr-vb-unverified { background: #bbb; color: #fff; font-style: italic; }';
+    h += '.sr-thumb { max-width: 180px; max-height: 140px; border-radius: 4px; border: 1px solid #ccc; margin-top: 4px; }';
+    h += '.sr-prov { font-size: 9pt; font-weight: 700; color: #555; text-align: right; padding-top: 6px; }';
+    h += '.sr-footer { font-size: 8pt; color: #999; text-align: center; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 10px; }';
+    h += '</style>';
+
+    // Cover page
+    h += '<div class="sr-cover">';
+    h += '<h1>CARL</h1>';
+    h += '<div class="sr-subtitle">Compliance Assistance and Regulatory Liaison</div>';
+    h += '<div class="sr-date">' + escapeHtml(dateDisplay) + '</div>';
+    h += '<div class="sr-meta">Project: <span class="sr-field" contenteditable="true">&nbsp;</span></div>';
+    h += '<div class="sr-meta">Inspector: <span class="sr-field" contenteditable="true">&nbsp;</span></div>';
+    h += '<div class="sr-meta" style="margin-top:20px;">Total Observations: <strong>' + entries.length + '</strong></div>';
+    if (tzName) h += '<div class="sr-meta">Timezone: ' + escapeHtml(tzName) + '</div>';
+    h += '</div>';
+
+    // Summary
+    var disc = data.discipline_breakdown || {};
+    var discKeys = Object.keys(disc);
+    h += '<div class="sr-summary">';
+    h += '<h3>Shift Summary</h3>';
+    h += '<div class="sr-summary-stat"><strong>' + entries.length + '</strong> observations</div>';
+    if (discKeys.length > 0) {
+      h += '<div class="sr-summary-stat">Disciplines: ' + discKeys.map(function(k) { return escapeHtml(k) + ' (' + disc[k] + ')'; }).join(', ') + '</div>';
+    }
+    if (data.verification_count > 0) {
+      h += '<div class="sr-summary-stat" style="color:#a02020;">' + data.verification_count + ' entries require manual verification</div>';
+    }
+    h += '</div>';
+
+    // Entries
+    entries.forEach(function(e, idx) {
+      var citeEval = e.citation_evaluation || 'UNKNOWN';
+      var descLabel = citeEval === 'COMPLIANT' ? 'Compliance Observation' :
+                      citeEval === 'CONFIRMED' ? 'Non-Conformance Description' :
+                      citeEval === 'CHALLENGED' ? 'Field Observation' : 'Observation Summary';
+      var descText = e.non_conformance_description || e.observation_summary || e.observation_text || '';
+
+      h += '<div class="sr-entry">';
+      h += '<div class="sr-entry-header">';
+      h += '<h4>#' + (idx + 1) + ' &mdash; ' + escapeHtml(e.discipline || '') + ' &mdash; ' + escapeHtml(e.entry_time || '') + '</h4>';
+      h += '<span class="sr-badge sr-badge-' + citeEval + '">' + escapeHtml(citeEval) + '</span>';
+      h += '</div>';
+      h += '<div class="sr-entry-body">';
+
+      // Description
+      h += '<div class="sr-field-row"><div class="sr-label">' + escapeHtml(descLabel) + '</div>';
+      h += '<div class="sr-value">' + escapeHtml(descText) + '</div></div>';
+
+      // Primary citation
+      if (e.primary_regulatory_citation) {
+        h += '<div class="sr-field-row"><div class="sr-label">Primary Regulatory Citation</div>';
+        h += '<div class="sr-value" style="font-family:monospace;font-size:9pt;">' + escapeHtml(e.primary_regulatory_citation) + '</div></div>';
+      }
+
+      // Additional citations
+      var addCits = e.additional_regulatory_citations || [];
+      if (addCits.length > 0) {
+        h += '<div class="sr-field-row"><div class="sr-label">Additional Regulatory Citations</div>';
+        addCits.forEach(function(c) {
+          h += '<div class="sr-cite-block">';
+          var src = (c.sourceName || '') + ' ' + (c.section || '');
+          var vstatus = c.verification_status || '';
+          var vbClass = vstatus === 'DUAL CONFIRMED' ? 'sr-vb-dual' :
+                        vstatus === 'TRIPLE CONFIRMED' ? 'sr-vb-triple' :
+                        vstatus === 'UNVERIFIED' ? 'sr-vb-unverified' : 'sr-vb-ref';
+          var vconf = (typeof c.verification_confidence === 'number') ? ' ' + c.verification_confidence.toFixed(2) : '';
+          var vbadge = vstatus ? '<span class="sr-vbadge ' + vbClass + '">' + escapeHtml(vstatus) + vconf + '</span>' : '';
+          h += '<div class="sr-cite-src">' + escapeHtml(src.trim()) + vbadge + '</div>';
+          if (c.requirement) h += '<div class="sr-cite-text">' + escapeHtml(c.requirement) + '</div>';
+          h += '</div>';
+        });
+        h += '</div>';
+      }
+
+      // Confidence + Applicability
+      h += '<div class="sr-field-row" style="display:flex;gap:30px;">';
+      h += '<div><div class="sr-label">Confidence</div><div class="sr-value">' + (e.confidence_score != null ? e.confidence_score.toFixed(2) : '—') + '</div></div>';
+      if (e.applicability) h += '<div><div class="sr-label">Applicability</div><div class="sr-value">' + escapeHtml(e.applicability) + '</div></div>';
+      h += '</div>';
+
+      // Rationale
+      if (e.evaluation_rationale) {
+        h += '<div class="sr-field-row"><div class="sr-label">Evaluation Rationale</div>';
+        h += '<div class="sr-value">' + escapeHtml(e.evaluation_rationale) + '</div></div>';
+      }
+
+      // Corrective action
+      var actionText = e.corrective_action_required || '';
+      if (actionText && !(citeEval === 'COMPLIANT' && actionText === 'None -- observation meets applicable requirements')) {
+        h += '<div class="sr-field-row"><div class="sr-label">Corrective Action Required</div>';
+        h += '<div class="sr-value">' + escapeHtml(actionText) + '</div></div>';
+      }
+
+      // Photo
+      if (e.image_thumbnail) {
+        h += '<div class="sr-field-row"><div class="sr-label">Site Photo</div>';
+        h += '<img class="sr-thumb" src="data:image/jpeg;base64,' + e.image_thumbnail + '" alt="Site photo"></div>';
+      }
+
+      // Provenance
+      h += '<div class="sr-prov">Verified: ' + escapeHtml(e.provenance || '—') + '</div>';
+
+      h += '</div>'; // sr-entry-body
+      h += '</div>'; // sr-entry
+    });
+
+    // Footer
+    h += '<div class="sr-footer">Generated by CARL — Compliance Assistance and Regulatory Liaison<br>' + escapeHtml(now.toLocaleString()) + '</div>';
+
+    reportDiv.innerHTML = h;
+    reportDiv.style.display = 'block';
+
+    // Small delay to let contenteditable fields render, then print
+    setTimeout(function() { window.print(); reportDiv.style.display = 'none'; }, 300);
+
+  } catch (err) {
+    alert('Failed to generate shift report: ' + err.message);
   }
 }
 </script>
