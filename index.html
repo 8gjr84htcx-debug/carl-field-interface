@@ -1410,7 +1410,7 @@ function renderResults(d) {
 
   var badge = document.getElementById('evalBadge');
   var evalType = d.citation_evaluation || 'UNKNOWN';
-  badge.textContent = evalType;
+  badge.textContent = displayEvalType(evalType);
   badge.className = 'eval-badge eval-' + evalType;
 
   var descLabel = evalType === 'COMPLIANT' ? 'Compliance Observation' :
@@ -1725,7 +1725,7 @@ async function toggleTts() {
   var discipline = d.discipline || 'unknown discipline';
   var citation = d.primary_regulatory_citation || 'no citation';
   var action = d.corrective_action_required || 'no corrective action specified';
-  var provNote = (d.provenance === 'TRIPLE CONFIRMED') ? ' Fully verified.' : '';
+  var provNote = (d.provenance === 'TRIPLE CONFIRMED') ? ' Primary, dual verified.' : '';
   var summary = 'Discipline: ' + discipline + '. Citation: ' + citation + '. Action: ' + action + '.' + provNote;
 
   btn.classList.add('loading');
@@ -1977,22 +1977,30 @@ async function deleteLogEntry(processedAt) {
 // Display translations for internal pipeline terms
 function displayProvenance(prov) {
   if (!prov) return '—';
-  if (prov === 'TRIPLE CONFIRMED') return 'Library + Dual Verified';
-  if (prov === 'DUAL CONFIRMED') return 'Dual Verified';
-  if (prov === 'LOOP CONFIRMED') return 'Library Verified';
-  if (prov === 'TIEBREAKER CONFIRMED') return 'Dual Verified (Resolved)';
-  if (prov.includes('TIEBREAKER REJECTED')) return 'Library Verified (Review Recommended)';
-  if (prov.includes('PARAMETRIC')) return 'Standards Reference — Verify';
+  if (prov === 'TRIPLE CONFIRMED') return 'Primary — Dual Verified';
+  if (prov === 'LOOP CONFIRMED') return 'Primary — Verified';
+  if (prov === 'DUAL CONFIRMED') return 'Standards — Dual Verified';
+  if (prov === 'TIEBREAKER CONFIRMED') return 'Conflict Resolved';
+  if (prov.includes('TIEBREAKER REJECTED')) return 'Conflict — Verify';
+  if (prov.includes('PARAMETRIC')) return 'Standards — Verify';
   return prov;
 }
 
 function displayVerificationStatus(status) {
   if (!status) return '';
-  if (status === 'TRIPLE CONFIRMED') return 'Fully Verified';
-  if (status === 'DUAL CONFIRMED') return 'Cross-Verified';
-  if (status === 'UNVERIFIED') return 'Pending Review';
-  if (status === 'REFERENCE ONLY') return 'Reference Only';
+  if (status === 'DUAL CONFIRMED') return 'Standards — Dual Verified';
+  if (status === 'TRIPLE CONFIRMED') return 'Primary — Dual Verified';
+  if (status === 'REFERENCE ONLY') return 'Standards — Verified';
+  if (status === 'UNVERIFIED') return 'Pending Verification';
   return status;
+}
+
+function displayEvalType(evalType) {
+  if (evalType === 'CONFIRMED') return 'Non-Compliant';
+  if (evalType === 'COMPLIANT') return 'Compliant';
+  if (evalType === 'CHALLENGED') return 'Under Review';
+  if (evalType === 'INSUFFICIENT') return 'Inconclusive';
+  return evalType;
 }
 
 // System status lights
@@ -2021,7 +2029,7 @@ function updateStatusLights(d) {
 
   // Eval Engine: always green when a result came back
   dotEval.className = 'status-dot green';
-  tipEval.textContent = (d.citation_evaluation || 'Unknown') + ' — confidence ' + (d.confidence_score != null ? d.confidence_score.toFixed(2) : '?');
+  tipEval.textContent = displayEvalType(d.citation_evaluation || 'Unknown') + ' — confidence ' + (d.confidence_score != null ? d.confidence_score.toFixed(2) : '?');
 
   // CrossCheck: green if passed with high confidence, yellow if unverified/low, red if unavailable
   var ccConf = d.crosscheck_confidence;
@@ -2171,7 +2179,7 @@ async function exportShiftReport() {
       h += '<div class="sr-entry">';
       h += '<div class="sr-entry-header">';
       h += '<h4>#' + (idx + 1) + ' &mdash; ' + escapeHtml(e.discipline || '') + ' &mdash; ' + escapeHtml(e.entry_time || '') + '</h4>';
-      h += '<span class="sr-badge sr-badge-' + citeEval + '">' + escapeHtml(citeEval) + '</span>';
+      h += '<span class="sr-badge sr-badge-' + citeEval + '">' + escapeHtml(displayEvalType(citeEval)) + '</span>';
       h += '</div>';
       h += '<div class="sr-entry-body">';
 
