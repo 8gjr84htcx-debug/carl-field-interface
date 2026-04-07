@@ -333,16 +333,17 @@
   }
 
   .auth-brand .subtitle {
-    font-size: 0.78rem;
+    font-size: 0.68rem;
     color: rgba(255,255,255,0.6);
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     font-weight: 400;
+    white-space: nowrap;
   }
 
   .auth-panel {
     width: 100%;
-    max-width: 440px;
+    max-width: 800px;
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -364,8 +365,6 @@
     padding: 20px 28px;
     border-bottom: 1px solid #e8e5de;
     background: #faf9f6;
-    max-height: 280px;
-    overflow-y: auto;
   }
 
   .auth-terms-title {
@@ -983,6 +982,7 @@
     header h1 { font-size: 1.5rem; }
     header span { display: none; }
     .auth-brand h1 { font-size: 2.4rem; }
+    .auth-brand .subtitle { white-space: normal; font-size: 0.62rem; }
     .metrics-row { grid-template-columns: 1fr; }
     .metrics-row .field {
       border-right: none;
