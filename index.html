@@ -211,6 +211,23 @@
     box-shadow: none;
   }
 
+  .btn-ask {
+    background: #4a7ab5;
+    color: #ffffff;
+    flex: 1;
+    letter-spacing: 0.06em;
+  }
+
+  .btn-ask:hover { background: #3d6399; box-shadow: 0 2px 8px rgba(74,122,181,0.25); }
+  .btn-ask:active { transform: scale(0.98); }
+  .btn-ask:disabled {
+    background: #9a9a9a;
+    color: #fff;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
   .btn-clear {
     background: #e8e5de;
     color: var(--text);
@@ -640,6 +657,25 @@
     flex-wrap: wrap;
     gap: 8px;
   }
+
+  .result-header.query-mode {
+    background: #6c757d;
+  }
+
+  .query-banner {
+    display: none;
+    padding: 10px 18px;
+    background: #fff8e1;
+    color: #b8860b;
+    font-weight: 800;
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+    text-align: center;
+    border-bottom: 1px solid #e8dcb0;
+    text-transform: uppercase;
+  }
+
+  .query-banner.visible { display: block; }
 
   .result-header h2 {
     font-size: 1.1rem;
@@ -1216,6 +1252,7 @@
     </div>
     <div class="btn-row">
       <button class="btn-submit" id="submitBtn" onclick="submitObservation()">SUBMIT</button>
+      <button class="btn-ask" id="askBtn" onclick="askObservation()">ASK</button>
       <button class="btn-clear" onclick="clearAll()">CLEAR</button>
       <button class="btn-mic" id="micBtn" onclick="toggleMic()" title="Voice input">&#x1F3A4;</button>
       <button class="btn-photo" id="photoBtn" onclick="document.getElementById('photoInput').click()" title="Attach photo">&#x1F4F7;</button>
@@ -1233,11 +1270,12 @@
   <div class="results" id="results">
     <div class="section-label">Evaluation Result</div>
     <div class="result-card">
-      <div class="result-header">
-        <h2>Field Inspection Entry</h2>
+      <div class="result-header" id="resultHeader">
+        <h2 id="resultHeaderTitle">Field Inspection Entry</h2>
         <button class="btn-tts" id="ttsBtn" onclick="toggleTts()" title="Read result aloud">&#x1F50A;</button>
         <span class="eval-badge" id="evalBadge"></span>
       </div>
+      <div class="query-banner" id="queryBanner">Reference Query -- Not for Inspection Record</div>
       <div class="result-body">
         <div class="field">
           <div class="field-label">Discipline</div>
@@ -1348,6 +1386,72 @@ document.getElementById('passwordInput').addEventListener('keydown', function(e)
   }
 });
 
+async function askObservation() {
+  var textarea = document.getElementById('observation');
+  var text = textarea.value.trim();
+  if (!text) { textarea.focus(); return; }
+
+  var submitBtn = document.getElementById('submitBtn');
+  var askBtn = document.getElementById('askBtn');
+  var loading = document.getElementById('loading');
+  var errorMsg = document.getElementById('errorMsg');
+  var results = document.getElementById('results');
+
+  submitBtn.disabled = true;
+  askBtn.disabled = true;
+  loading.classList.add('visible');
+  errorMsg.classList.remove('visible');
+  results.classList.remove('visible');
+
+  try {
+    var controller = new AbortController();
+    var timeout = setTimeout(function() { controller.abort(); }, 180000);
+
+    var payload = {
+      observation: text,
+      mode: 'query',
+      notebook_url: getSelectedNotebookUrl()
+    };
+
+    var resp = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeout);
+
+    if (!resp.ok) {
+      throw new Error('Webhook returned HTTP ' + resp.status);
+    }
+
+    var data = await resp.json();
+
+    if (data.error && !data.discipline) {
+      throw new Error(data.error);
+    }
+
+    renderResults(data, true);
+  } catch (err) {
+    var msg = 'Request failed: ';
+    if (err.name === 'AbortError') {
+      msg += 'Request timed out (180s). The server may be busy.';
+    } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      msg += 'Unable to reach the CARL webhook. Check your network connection.';
+    } else {
+      msg += err.message;
+    }
+    errorMsg.textContent = msg;
+    errorMsg.classList.add('visible');
+  } finally {
+    submitBtn.disabled = false;
+    askBtn.disabled = false;
+    loading.classList.remove('visible');
+  }
+}
+
 async function submitObservation() {
   var textarea = document.getElementById('observation');
   var text = textarea.value.trim();
@@ -1405,10 +1509,57 @@ async function submitObservation() {
   }
 }
 
-function renderResults(d) {
+function renderResults(d, isQuery) {
   var results = document.getElementById('results');
-
+  var header = document.getElementById('resultHeader');
+  var headerTitle = document.getElementById('resultHeaderTitle');
+  var queryBanner = document.getElementById('queryBanner');
   var badge = document.getElementById('evalBadge');
+  var metricsRow = document.querySelector('#results .metrics-row');
+  var actionField = document.getElementById('rActionField');
+  var rationaleField = document.getElementById('rRationale') ? document.getElementById('rRationale').closest('.field') : null;
+  var addCitSection = document.getElementById('additionalCitationsSection');
+  var photoField = document.getElementById('rPhotoField');
+
+  if (isQuery) {
+    header.classList.add('query-mode');
+    headerTitle.textContent = 'Reference Query Response';
+    queryBanner.classList.add('visible');
+    badge.style.display = 'none';
+    if (metricsRow) metricsRow.style.display = 'none';
+    if (actionField) actionField.style.display = 'none';
+    if (rationaleField) rationaleField.style.display = 'none';
+    if (addCitSection) addCitSection.style.display = 'none';
+    if (photoField) photoField.style.display = 'none';
+
+    document.getElementById('rDiscipline').textContent = d.discipline || '—';
+    document.getElementById('rDescriptionLabel').textContent = 'Response';
+    var responseText = d.response || d.response_text || d.answer ||
+                       d.non_conformance_description || d.observation_summary || '—';
+    document.getElementById('rDescription').textContent = responseText;
+    document.getElementById('rCitation').textContent = d.primary_regulatory_citation || d.citation || '—';
+    document.getElementById('rTimestamp').textContent =
+      d.processed_at ? 'Processed: ' + new Date(d.processed_at).toLocaleString() : '';
+
+    results.classList.add('visible');
+    results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    lastResultData = d;
+    stopTtsAudio();
+    var ttsBtnQ = document.getElementById('ttsBtn');
+    ttsBtnQ.classList.add('visible');
+    ttsBtnQ.classList.remove('loading');
+    ttsBtnQ.innerHTML = '&#x1F50A;';
+    return;
+  }
+
+  header.classList.remove('query-mode');
+  headerTitle.textContent = 'Field Inspection Entry';
+  queryBanner.classList.remove('visible');
+  badge.style.display = '';
+  if (metricsRow) metricsRow.style.display = '';
+  if (rationaleField) rationaleField.style.display = '';
+
   var evalType = d.citation_evaluation || 'UNKNOWN';
   badge.textContent = displayEvalType(evalType);
   badge.className = 'eval-badge eval-' + evalType;
@@ -1780,6 +1931,13 @@ async function toggleTts() {
 
 // Daily Log
 var WEBHOOK_URL = 'https://n8n.carlcompliance.com/webhook/carl-verify';
+var DEFAULT_NOTEBOOK_URL = '';
+
+function getSelectedNotebookUrl() {
+  var sel = document.getElementById('disciplineSelect');
+  if (sel && sel.value) return sel.value;
+  return DEFAULT_NOTEBOOK_URL;
+}
 
 async function loadDailyLog() {
   var logDiv = document.getElementById('dailyLog');
