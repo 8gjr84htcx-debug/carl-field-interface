@@ -1554,7 +1554,9 @@ async function askObservation() {
     var payload = {
       observation: text,
       mode: 'query',
-      notebook_url: getSelectedNotebookUrl()
+      notebook_url: getSelectedNotebookUrl(),
+      inspector_username: authUser ? authUser.username : null,
+      inspector_display_name: authUser ? authUser.display_name : null
     };
 
     var resp = await fetch(WEBHOOK_URL, {
@@ -1620,11 +1622,21 @@ async function submitObservation() {
     var controller = new AbortController();
     var timeout = setTimeout(function() { controller.abort(); }, 180000);
 
+    var payload = { observation: text };
+    if (attachedPhotoBase64) {
+      payload.image = attachedPhotoBase64;
+      payload.image_thumbnail = attachedThumbBase64;
+    }
+    if (authUser) {
+      payload.inspector_username = authUser.username;
+      payload.inspector_display_name = authUser.display_name;
+    }
+
     var resp = await fetch(WEBHOOK_URL, {
       method: 'POST',
       mode: 'cors',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(attachedPhotoBase64 ? { observation: text, image: attachedPhotoBase64, image_thumbnail: attachedThumbBase64 } : { observation: text }),
+      body: JSON.stringify(payload),
       signal: controller.signal
     });
 
@@ -2138,24 +2150,37 @@ async function loadDailyLog() {
 
     var html = '';
 
+    // Filter entries to only those owned by the current inspector.
+    // Legacy entries (no inspector_username) remain visible to shepherd only.
+    var me = authUser ? authUser.username : null;
+    var allEntries = data.entries || [];
+    var entries = allEntries.filter(function(e) {
+      if (e.inspector_username != null && e.inspector_username !== '') {
+        return e.inspector_username === me;
+      }
+      return me === 'shepherd';
+    });
+
+    // Recompute summary aggregates from the filtered set.
+    var filteredTotal = entries.length;
+    var disc = {};
+    entries.forEach(function(e) {
+      var d = e.discipline || 'Unspecified';
+      disc[d] = (disc[d] || 0) + 1;
+    });
+
     // Summary card
     html += '<div class="log-summary">';
     html += '<h3>Report: ' + escapeHtml(data.report_date) + '</h3>';
-    html += '<div class="log-stat"><strong>' + data.total_observations + '</strong> observations today</div>';
+    html += '<div class="log-stat"><strong>' + filteredTotal + '</strong> observations today</div>';
 
-    var disc = data.discipline_breakdown || {};
     var discKeys = Object.keys(disc);
     if (discKeys.length > 0) {
       html += '<div class="log-stat">Disciplines: ' + discKeys.map(function(k) { return escapeHtml(k) + ' (' + disc[k] + ')'; }).join(', ') + '</div>';
     }
-
-    if (data.verification_count > 0) {
-      html += '<div class="log-stat" style="color:var(--insufficient);font-weight:600;">' + data.verification_count + ' entries need manual citation verification</div>';
-    }
     html += '</div>';
 
     // Entries
-    var entries = data.entries || [];
     if (entries.length === 0) {
       html += '<div class="log-loading">No entries for today.</div>';
     } else {
@@ -2432,7 +2457,23 @@ async function exportShiftReport() {
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
 
-    var entries = data.entries || [];
+    // Filter entries to current inspector. Legacy entries (no inspector_username) visible to shepherd only.
+    var me = authUser ? authUser.username : null;
+    var allEntries = data.entries || [];
+    var entries = allEntries.filter(function(e) {
+      if (e.inspector_username != null && e.inspector_username !== '') {
+        return e.inspector_username === me;
+      }
+      return me === 'shepherd';
+    });
+
+    // Recompute discipline breakdown from the filtered entries.
+    var filteredDisc = {};
+    entries.forEach(function(e) {
+      var d = e.discipline || 'Unspecified';
+      filteredDisc[d] = (filteredDisc[d] || 0) + 1;
+    });
+
     var now = new Date();
     var tzName = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
     var dateDisplay = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -2490,16 +2531,12 @@ async function exportShiftReport() {
     h += '</div>';
 
     // Summary
-    var disc = data.discipline_breakdown || {};
-    var discKeys = Object.keys(disc);
+    var discKeys = Object.keys(filteredDisc);
     h += '<div class="sr-summary">';
     h += '<h3>Shift Summary</h3>';
     h += '<div class="sr-summary-stat"><strong>' + entries.length + '</strong> observations</div>';
     if (discKeys.length > 0) {
-      h += '<div class="sr-summary-stat">Disciplines: ' + discKeys.map(function(k) { return escapeHtml(k) + ' (' + disc[k] + ')'; }).join(', ') + '</div>';
-    }
-    if (data.verification_count > 0) {
-      h += '<div class="sr-summary-stat" style="color:#a02020;">' + data.verification_count + ' entries require manual verification</div>';
+      h += '<div class="sr-summary-stat">Disciplines: ' + discKeys.map(function(k) { return escapeHtml(k) + ' (' + filteredDisc[k] + ')'; }).join(', ') + '</div>';
     }
     h += '</div>';
 
