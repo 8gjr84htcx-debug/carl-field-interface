@@ -1157,6 +1157,67 @@
     .auth-terms { padding-top: 24px; padding-bottom: 24px; }
     .auth-panel-footer { padding-top: 22px; padding-bottom: 28px; }
     .auth-term { font-size: 0.7rem; }
+  }
+
+  /* Multi-user auth additions */
+  .auth-panel-header input[type="text"] {
+    border: none;
+    border-bottom: 1px solid #d4d0c8;
+    border-radius: 0;
+    padding: 12px 0;
+    font-size: 1.05rem;
+    font-family: Georgia, "Times New Roman", Times, serif;
+    letter-spacing: 0.08em;
+    background: transparent;
+    color: #1a1a1a;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.3s;
+    -webkit-appearance: none;
+  }
+  .auth-panel-header input[type="text"]:focus { border-bottom-color: #c9a84c; box-shadow: none; }
+  .auth-panel-header input[type="text"]::placeholder { color: #bbb; font-style: italic; letter-spacing: 0.04em; }
+
+  .user-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: 12px;
+  }
+  .user-identity {
+    text-align: right;
+    line-height: 1.15;
+  }
+  .user-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #f5f0e8;
+    letter-spacing: 0.02em;
+  }
+  .user-title {
+    font-size: 0.62rem;
+    font-weight: 400;
+    color: #c9a84c;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .btn-logout {
+    background: transparent;
+    color: #c9a84c;
+    border: 1px solid #c9a84c;
+    border-radius: 3px;
+    padding: 6px 14px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .btn-logout:hover { background: #c9a84c; color: #1c2b4a; }
+
+  @media (max-width: 600px) {
+    .user-identity { display: none; }
     .metrics-row { grid-template-columns: 1fr; }
     .metrics-row .field {
       border-right: none;
@@ -1195,8 +1256,10 @@
   <div class="auth-rule"></div>
   <div class="auth-panel">
     <div class="auth-panel-header">
-      <div class="auth-input-label">Access Code</div>
-      <input type="password" id="passwordInput" placeholder="Enter access code" autocomplete="off">
+      <div class="auth-input-label">Username</div>
+      <input type="text" id="usernameInput" placeholder="Enter username" autocomplete="username">
+      <div class="auth-input-label" style="margin-top:18px;">Password</div>
+      <input type="password" id="passwordInput" placeholder="Enter password" autocomplete="current-password">
     </div>
     <div class="auth-terms">
       <div class="auth-terms-title">Terms of Use</div>
@@ -1211,8 +1274,8 @@
         <input type="checkbox" id="disclaimerCheck" onchange="document.getElementById('authBtn').disabled = !this.checked">
         <span class="auth-ack-label">I have read and acknowledge the terms of use set forth above.</span>
       </label>
-      <button class="auth-btn" id="authBtn" onclick="authenticate()" disabled>Authenticate</button>
-      <div class="auth-error" id="authError">Invalid access code.</div>
+      <button class="auth-btn" id="authBtn" onclick="login()" disabled>Login</button>
+      <div class="auth-error" id="authError">Invalid username or password.</div>
     </div>
   </div>
 </div>
@@ -1239,6 +1302,13 @@
       <span class="status-label">CrossCheck</span>
       <span class="status-tooltip" id="tipCrossCheck">Awaiting first query</span>
     </div>
+  </div>
+  <div class="user-bar">
+    <div class="user-identity">
+      <div class="user-name" id="userName"></div>
+      <div class="user-title" id="userTitle"></div>
+    </div>
+    <button class="btn-logout" onclick="logout()">Logout</button>
   </div>
 </header>
 
@@ -1360,29 +1430,93 @@
 
 <script>
 var DAILY_REPORT_URL = 'https://n8n.carlcompliance.com/webhook/carl-daily-report';
-var ACCESS_CODE = 'CARL2026';
-var ELEVENLABS_API_KEY = 'sk_09414f333a8dd1011bc283498604214bf5e95ce85d270000';
+var AUTH_URL = 'https://auth.carlcompliance.com';
+// ELEVENLABS KEY REMOVED - routed through backend
+var authToken = null;
+var authUser = null;
 var attachedPhotoBase64 = null;
 var attachedThumbBase64 = null;
 
-function authenticate() {
-  var input = document.getElementById('passwordInput');
+function authHeaders(extra) {
+  var h = extra ? Object.assign({}, extra) : {};
+  if (authToken) h['Authorization'] = 'Bearer ' + authToken;
+  return h;
+}
+
+async function login() {
+  var username = document.getElementById('usernameInput').value.trim();
+  var password = document.getElementById('passwordInput').value;
   var error = document.getElementById('authError');
-  if (input.value === ACCESS_CODE) {
+  error.classList.remove('visible');
+  if (!username || !password) {
+    error.textContent = 'Username and password required.';
+    error.classList.add('visible');
+    return;
+  }
+  try {
+    var resp = await fetch(AUTH_URL + '/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username, password: password })
+    });
+    if (resp.status === 429) {
+      error.textContent = 'Too many login attempts. Try again in 15 minutes.';
+      error.classList.add('visible');
+      return;
+    }
+    if (!resp.ok) {
+      error.textContent = 'Invalid username or password.';
+      error.classList.add('visible');
+      document.getElementById('passwordInput').value = '';
+      return;
+    }
+    var data = await resp.json();
+    authToken = data.token;
+    authUser = data.user;
+    document.getElementById('userName').textContent = authUser.display_name || '';
+    document.getElementById('userTitle').textContent = authUser.title || '';
     document.getElementById('authScreen').style.display = 'none';
     document.getElementById('appContent').classList.add('visible');
     document.getElementById('observation').focus();
-  } else {
+  } catch (err) {
+    error.textContent = 'Unable to reach authentication service.';
     error.classList.add('visible');
-    input.value = '';
-    input.focus();
   }
 }
 
+async function logout() {
+  var token = authToken;
+  authToken = null;
+  authUser = null;
+  try {
+    if (token) {
+      await fetch(AUTH_URL + '/logout', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+    }
+  } catch (e) { /* ignore — local state already cleared */ }
+  document.getElementById('appContent').classList.remove('visible');
+  document.getElementById('authScreen').style.display = '';
+  var uInput = document.getElementById('usernameInput'); if (uInput) uInput.value = '';
+  var pInput = document.getElementById('passwordInput'); if (pInput) pInput.value = '';
+  var uName = document.getElementById('userName'); if (uName) uName.textContent = '';
+  var uTitle = document.getElementById('userTitle'); if (uTitle) uTitle.textContent = '';
+  var ack = document.getElementById('disclaimerCheck'); if (ack) { ack.checked = false; document.getElementById('authBtn').disabled = true; }
+}
+
+function handleAuthFailure() {
+  // Called when a webhook returns 401 — token expired or invalid
+  logout();
+}
+
+document.getElementById('usernameInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('passwordInput').focus(); }
+});
 document.getElementById('passwordInput').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') {
     e.preventDefault();
-    authenticate();
+    if (!document.getElementById('authBtn').disabled) login();
   }
 });
 
@@ -1426,12 +1560,14 @@ async function askObservation() {
     var resp = await fetch(WEBHOOK_URL, {
       method: 'POST',
       mode: 'cors',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
       signal: controller.signal
     });
 
     clearTimeout(timeout);
+
+    if (resp.status === 401) { handleAuthFailure(); return; }
 
     if (!resp.ok) {
       throw new Error('Webhook returned HTTP ' + resp.status);
@@ -1487,12 +1623,14 @@ async function submitObservation() {
     var resp = await fetch(WEBHOOK_URL, {
       method: 'POST',
       mode: 'cors',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(attachedPhotoBase64 ? { observation: text, image: attachedPhotoBase64, image_thumbnail: attachedThumbBase64 } : { observation: text }),
       signal: controller.signal
     });
 
     clearTimeout(timeout);
+
+    if (resp.status === 401) { handleAuthFailure(); return; }
 
     if (!resp.ok) {
       throw new Error('Webhook returned HTTP ' + resp.status);
@@ -1814,6 +1952,17 @@ async function transcribeAudio(blob) {
   var errorMsg = document.getElementById('errorMsg');
 
   var savedValue = textarea.value;
+
+  // Voice transcription disabled — ElevenLabs key removed from frontend.
+  // Backend proxy pending. Restore fetch call once /transcribe endpoint exists.
+  alert('Voice transcription is temporarily unavailable — backend proxy pending.');
+  textarea.disabled = false;
+  btn.classList.remove('transcribing');
+  btn.innerHTML = '&#x1F3A4;';
+  btn.title = 'Voice input';
+  return;
+
+  // eslint-disable-next-line no-unreachable
   textarea.value = 'Transcribing...';
   textarea.disabled = true;
 
@@ -1830,7 +1979,7 @@ async function transcribeAudio(blob) {
     var resp = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
       method: 'POST',
       headers: {
-        'xi-api-key': ELEVENLABS_API_KEY
+        // 'xi-api-key': backend proxy pending
       },
       body: formData
     });
@@ -1897,6 +2046,13 @@ async function toggleTts() {
   var provNote = (d.provenance === 'TRIPLE CONFIRMED') ? ' Primary, dual verified.' : '';
   var summary = 'Discipline: ' + discipline + '. Citation: ' + citation + '. Action: ' + action + '.' + provNote;
 
+  // Voice output disabled — ElevenLabs key removed from frontend.
+  // Backend proxy pending. Restore fetch call once /tts endpoint exists.
+  alert('Voice output is temporarily unavailable — backend proxy pending.');
+  btn.innerHTML = '&#x1F50A;';
+  return;
+
+  // eslint-disable-next-line no-unreachable
   btn.classList.add('loading');
   btn.innerHTML = '&#x23F3;';
 
@@ -1904,7 +2060,7 @@ async function toggleTts() {
     var resp = await fetch('https://api.elevenlabs.io/v1/text-to-speech/LyZq9ggDlPpK7b17wpjG', {
       method: 'POST',
       headers: {
-        'xi-api-key': ELEVENLABS_API_KEY,
+        // 'xi-api-key': backend proxy pending
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -1972,10 +2128,11 @@ async function loadDailyLog() {
   try {
     var resp = await fetch(DAILY_REPORT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ date: new Date().toISOString().split('T')[0] })
     });
 
+    if (resp.status === 401) { handleAuthFailure(); return; }
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
 
@@ -2134,10 +2291,11 @@ async function deleteLogEntry(processedAt) {
   try {
     var resp = await fetch(DAILY_REPORT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ action: 'delete', processed_at: processedAt })
     });
 
+    if (resp.status === 401) { handleAuthFailure(); return; }
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
     if (!data.success) throw new Error(data.error || 'Delete failed');
@@ -2267,9 +2425,10 @@ async function exportShiftReport() {
   try {
     var resp = await fetch(DAILY_REPORT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ date: today })
     });
+    if (resp.status === 401) { handleAuthFailure(); return; }
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
 
