@@ -1386,10 +1386,20 @@ document.getElementById('passwordInput').addEventListener('keydown', function(e)
   }
 });
 
+var askMode = false;
+
+function setAskMode(on) {
+  askMode = on;
+  var photoBtn = document.getElementById('photoBtn');
+  if (photoBtn) photoBtn.style.display = on ? 'none' : '';
+}
+
 async function askObservation() {
   var textarea = document.getElementById('observation');
   var text = textarea.value.trim();
   if (!text) { textarea.focus(); return; }
+
+  setAskMode(true);
 
   var submitBtn = document.getElementById('submitBtn');
   var askBtn = document.getElementById('askBtn');
@@ -1449,6 +1459,7 @@ async function askObservation() {
     submitBtn.disabled = false;
     askBtn.disabled = false;
     loading.classList.remove('visible');
+    setAskMode(false);
   }
 }
 
@@ -1456,6 +1467,8 @@ async function submitObservation() {
   var textarea = document.getElementById('observation');
   var text = textarea.value.trim();
   if (!text) { textarea.focus(); return; }
+
+  setAskMode(false);
 
   var btn = document.getElementById('submitBtn');
   var loading = document.getElementById('loading');
@@ -1667,6 +1680,7 @@ function clearAll() {
   document.getElementById('results').classList.remove('visible');
   document.getElementById('errorMsg').classList.remove('visible');
   removePhoto();
+  setAskMode(false);
   document.getElementById('observation').focus();
 }
 
@@ -1735,6 +1749,10 @@ document.getElementById('observation').addEventListener('keydown', function(e) {
     e.preventDefault();
     submitObservation();
   }
+});
+
+document.getElementById('observation').addEventListener('input', function() {
+  if (askMode && this.value.trim() === '') setAskMode(false);
 });
 
 // Microphone recording with ElevenLabs Scribe transcription
