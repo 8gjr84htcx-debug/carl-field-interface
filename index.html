@@ -859,6 +859,141 @@
 
   .btn-dailylog:hover { background: var(--accent-hover); }
 
+  .btn-admin {
+    background: #1c2b4a;
+    color: var(--gold);
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    letter-spacing: 0.06em;
+    margin-top: 16px;
+    width: 100%;
+    border: 1px solid var(--gold);
+  }
+
+  .btn-admin:hover { background: #26365a; }
+  .admin-hidden { display: none !important; }
+
+  .admin-panel { display: none; margin-top: 20px; }
+  .admin-panel.visible { display: block; }
+
+  .admin-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--gold);
+    border-radius: 6px;
+    padding: 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+
+  .admin-section h3 {
+    font-family: Georgia, "Times New Roman", Times, serif;
+    font-size: 1.05rem;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  .admin-users-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  .admin-users-table th, .admin-users-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: middle;
+  }
+  .admin-users-table th {
+    background: #f6f6f2;
+    color: var(--text-secondary);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+  }
+  .admin-users-table tr.inactive td { opacity: 0.55; }
+  .admin-users-table .admin-username { font-weight: 600; color: var(--text); }
+  .admin-users-table .admin-actions { white-space: nowrap; }
+  .admin-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .admin-badge-active { background: #dff5e1; color: #1f6a35; }
+  .admin-badge-inactive { background: #f5d6d6; color: #8a2a2a; }
+
+  .admin-btn {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text);
+    cursor: pointer;
+    margin-right: 4px;
+  }
+  .admin-btn:hover { background: #f3f3ee; }
+  .admin-btn-danger { color: #8a2a2a; border-color: #d8b4b4; }
+  .admin-btn-danger:hover { background: #fbecec; }
+  .admin-btn-success { color: #1f6a35; border-color: #b9dcc2; }
+  .admin-btn-success:hover { background: #ecf8ef; }
+
+  .admin-form-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr) auto;
+    gap: 8px;
+    align-items: end;
+  }
+  .admin-form-field label {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+  .admin-form-field input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 0.9rem;
+    font-family: inherit;
+  }
+  .admin-form-field input:focus { outline: none; border-color: var(--accent); }
+  .admin-form-submit {
+    background: var(--accent);
+    color: #fff;
+    padding: 9px 18px;
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .admin-form-submit:hover { background: var(--accent-hover); }
+  .admin-msg {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    display: none;
+  }
+  .admin-msg.visible { display: block; }
+  .admin-msg-ok { background: #dff5e1; color: #1f6a35; }
+  .admin-msg-err { background: #f5d6d6; color: #8a2a2a; }
+
+  @media (max-width: 640px) {
+    .admin-form-row { grid-template-columns: 1fr; }
+    .admin-users-table { font-size: 0.78rem; }
+    .admin-users-table th, .admin-users-table td { padding: 6px 6px; }
+  }
+
   .daily-log { display: none; margin-top: 20px; }
   .daily-log.visible { display: block; }
 
@@ -1403,14 +1538,54 @@
     </div>
   </div>
 
-  <div style="display:flex;gap:10px;">
-    <button class="btn-dailylog" style="flex:1;" onclick="loadDailyLog()">DAILY LOG</button>
-    <button class="btn-export" style="flex:1;" onclick="exportShiftReport()">EXPORT SHIFT REPORT</button>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <button class="btn-dailylog" style="flex:1;min-width:140px;" onclick="loadDailyLog()">DAILY LOG</button>
+    <button class="btn-export" style="flex:1;min-width:180px;" onclick="exportShiftReport()">EXPORT SHIFT REPORT</button>
+    <button class="btn-admin admin-hidden" id="adminBtn" style="flex:1;min-width:110px;" onclick="toggleAdmin()">ADMIN</button>
   </div>
 
   <div class="daily-log" id="dailyLog">
     <div class="section-label">Daily Log</div>
     <div id="dailyLogContent"><div class="log-loading">Loading...</div></div>
+  </div>
+
+  <div class="admin-panel" id="adminPanel">
+    <div class="section-label">Administration</div>
+
+    <div class="admin-section">
+      <h3>Inspector Accounts</h3>
+      <div style="overflow-x:auto;">
+        <table class="admin-users-table" id="adminUsersTable">
+          <thead>
+            <tr><th>Username</th><th>Display Name</th><th>Title</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="adminUsersTbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:20px;">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="admin-msg" id="adminUsersMsg"></div>
+    </div>
+
+    <div class="admin-section">
+      <h3>Add Inspector</h3>
+      <div class="admin-form-row">
+        <div class="admin-form-field">
+          <label for="adminNewUsername">Username</label>
+          <input type="text" id="adminNewUsername" autocomplete="off" placeholder="inspector013">
+        </div>
+        <div class="admin-form-field">
+          <label for="adminNewDisplayName">Display Name</label>
+          <input type="text" id="adminNewDisplayName" autocomplete="off" placeholder="Inspector 013">
+        </div>
+        <div class="admin-form-field">
+          <label for="adminNewPassword">Password</label>
+          <input type="password" id="adminNewPassword" autocomplete="new-password" placeholder="min 8 chars">
+        </div>
+        <button class="admin-form-submit" onclick="addInspector()">ADD</button>
+      </div>
+      <div class="admin-msg" id="adminAddMsg"></div>
+    </div>
   </div>
 </main>
 
@@ -1430,6 +1605,7 @@
 
 <script>
 var DAILY_REPORT_URL = 'https://n8n.carlcompliance.com/webhook/carl-daily-report';
+var ASK_RESULT_URL = 'https://n8n.carlcompliance.com/webhook/carl-ask-result';
 var AUTH_URL = 'https://auth.carlcompliance.com';
 // ELEVENLABS KEY REMOVED - routed through backend
 var authToken = null;
@@ -1477,6 +1653,7 @@ async function login() {
     document.getElementById('userTitle').textContent = authUser.title || '';
     document.getElementById('authScreen').style.display = 'none';
     document.getElementById('appContent').classList.add('visible');
+    updateAdminVisibility();
     document.getElementById('observation').focus();
   } catch (err) {
     error.textContent = 'Unable to reach authentication service.';
@@ -1503,6 +1680,182 @@ async function logout() {
   var uName = document.getElementById('userName'); if (uName) uName.textContent = '';
   var uTitle = document.getElementById('userTitle'); if (uTitle) uTitle.textContent = '';
   var ack = document.getElementById('disclaimerCheck'); if (ack) { ack.checked = false; document.getElementById('authBtn').disabled = true; }
+  var adminBtn = document.getElementById('adminBtn'); if (adminBtn) adminBtn.classList.add('admin-hidden');
+  var adminPanel = document.getElementById('adminPanel'); if (adminPanel) adminPanel.classList.remove('visible');
+}
+
+function updateAdminVisibility() {
+  var btn = document.getElementById('adminBtn');
+  if (!btn) return;
+  var isShepherd = !!(authUser && authUser.username === 'shepherd');
+  btn.classList.toggle('admin-hidden', !isShepherd);
+}
+
+async function toggleAdmin() {
+  var panel = document.getElementById('adminPanel');
+  var dailyLog = document.getElementById('dailyLog');
+  if (panel.classList.contains('visible')) {
+    panel.classList.remove('visible');
+    return;
+  }
+  if (dailyLog) dailyLog.classList.remove('visible');
+  panel.classList.add('visible');
+  await loadAdminUsers();
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function adminShowMsg(elId, text, ok) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'admin-msg visible ' + (ok ? 'admin-msg-ok' : 'admin-msg-err');
+  if (ok) setTimeout(function() { el.classList.remove('visible'); }, 3500);
+}
+
+async function adminFetch(path, opts) {
+  opts = opts || {};
+  opts.headers = authHeaders(Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {}));
+  var resp = await fetch(AUTH_URL + path, opts);
+  if (resp.status === 401) { handleAuthFailure(); throw new Error('auth'); }
+  if (resp.status === 403) { throw new Error('Forbidden — shepherd access required'); }
+  var data = null;
+  try { data = await resp.json(); } catch (e) { /* may be empty */ }
+  if (!resp.ok) {
+    var msg = (data && data.error) ? data.error : ('HTTP ' + resp.status);
+    throw new Error(msg);
+  }
+  return data || {};
+}
+
+async function loadAdminUsers() {
+  var tbody = document.getElementById('adminUsersTbody');
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:20px;">Loading…</td></tr>';
+  try {
+    var data = await adminFetch('/admin/users', { method: 'GET' });
+    renderAdminUsers(data.users || []);
+  } catch (err) {
+    if (err.message === 'auth') return;
+    tbody.innerHTML = '<tr><td colspan="5" style="color:#8a2a2a;padding:14px;">Failed to load users: ' + escapeHtml(err.message) + '</td></tr>';
+  }
+}
+
+function renderAdminUsers(users) {
+  var tbody = document.getElementById('adminUsersTbody');
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:20px;">No users.</td></tr>';
+    return;
+  }
+  var rows = users.map(function(u) {
+    var isShepherd = u.username === 'shepherd';
+    var badge = u.active
+      ? '<span class="admin-badge admin-badge-active">Active</span>'
+      : '<span class="admin-badge admin-badge-inactive">Inactive</span>';
+    var changePwBtn = '<button class="admin-btn" onclick="changePassword(\'' + escapeAttr(u.username) + '\')">Change Password</button>';
+    var changeNameBtn = '<button class="admin-btn" onclick="changeDisplayName(\'' + escapeAttr(u.username) + '\', \'' + escapeAttr(u.display_name || '') + '\')">Change Display Name</button>';
+    var toggleBtn;
+    if (isShepherd) {
+      toggleBtn = '';
+    } else if (u.active) {
+      toggleBtn = '<button class="admin-btn admin-btn-danger" onclick="toggleActive(\'' + escapeAttr(u.username) + '\', false)">Deactivate</button>';
+    } else {
+      toggleBtn = '<button class="admin-btn admin-btn-success" onclick="toggleActive(\'' + escapeAttr(u.username) + '\', true)">Reactivate</button>';
+    }
+    return '<tr class="' + (u.active ? '' : 'inactive') + '">'
+      + '<td class="admin-username">' + escapeHtml(u.username) + '</td>'
+      + '<td>' + escapeHtml(u.display_name || '') + '</td>'
+      + '<td>' + escapeHtml(u.title || '') + '</td>'
+      + '<td>' + badge + '</td>'
+      + '<td class="admin-actions">' + changePwBtn + changeNameBtn + toggleBtn + '</td>'
+      + '</tr>';
+  });
+  tbody.innerHTML = rows.join('');
+}
+
+async function changeDisplayName(username, current) {
+  var name = prompt('New display name for ' + username + ' (1-60 characters):', current || '');
+  if (name === null) return;
+  name = String(name).trim();
+  if (!name) {
+    adminShowMsg('adminUsersMsg', 'Display name cannot be empty.', false);
+    return;
+  }
+  if (name.length > 60) {
+    adminShowMsg('adminUsersMsg', 'Display name must be 60 characters or fewer.', false);
+    return;
+  }
+  try {
+    await adminFetch('/admin/change-display-name', {
+      method: 'POST',
+      body: JSON.stringify({ username: username, display_name: name })
+    });
+    adminShowMsg('adminUsersMsg', 'Display name updated for ' + username + '.', true);
+    await loadAdminUsers();
+  } catch (err) {
+    if (err.message === 'auth') return;
+    adminShowMsg('adminUsersMsg', 'Error: ' + err.message, false);
+  }
+}
+
+async function changePassword(username) {
+  var pw = prompt('New password for ' + username + ' (min 8 characters):');
+  if (pw === null) return;
+  pw = String(pw);
+  if (pw.length < 8) {
+    adminShowMsg('adminUsersMsg', 'Password must be at least 8 characters.', false);
+    return;
+  }
+  try {
+    await adminFetch('/admin/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ username: username, password: pw })
+    });
+    adminShowMsg('adminUsersMsg', 'Password updated for ' + username + '.', true);
+  } catch (err) {
+    if (err.message === 'auth') return;
+    adminShowMsg('adminUsersMsg', 'Error: ' + err.message, false);
+  }
+}
+
+async function toggleActive(username, activate) {
+  var path = activate ? '/admin/reactivate' : '/admin/deactivate';
+  var verb = activate ? 'reactivate' : 'deactivate';
+  if (!activate && !confirm('Deactivate ' + username + '? This will invalidate their sessions and block further logins.')) return;
+  try {
+    await adminFetch(path, { method: 'POST', body: JSON.stringify({ username: username }) });
+    adminShowMsg('adminUsersMsg', username + ' ' + (activate ? 'reactivated' : 'deactivated') + '.', true);
+    await loadAdminUsers();
+  } catch (err) {
+    if (err.message === 'auth') return;
+    adminShowMsg('adminUsersMsg', 'Error: ' + err.message, false);
+  }
+}
+
+async function addInspector() {
+  var username = document.getElementById('adminNewUsername').value.trim();
+  var displayName = document.getElementById('adminNewDisplayName').value.trim();
+  var password = document.getElementById('adminNewPassword').value;
+  if (!username || !displayName || !password) {
+    adminShowMsg('adminAddMsg', 'All fields are required.', false);
+    return;
+  }
+  try {
+    await adminFetch('/admin/add-user', {
+      method: 'POST',
+      body: JSON.stringify({ username: username, display_name: displayName, password: password })
+    });
+    adminShowMsg('adminAddMsg', 'Added ' + username + '.', true);
+    document.getElementById('adminNewUsername').value = '';
+    document.getElementById('adminNewDisplayName').value = '';
+    document.getElementById('adminNewPassword').value = '';
+    await loadAdminUsers();
+  } catch (err) {
+    if (err.message === 'auth') return;
+    adminShowMsg('adminAddMsg', 'Error: ' + err.message, false);
+  }
+}
+
+function escapeAttr(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function handleAuthFailure() {
@@ -1532,31 +1885,54 @@ async function askObservation() {
   var textarea = document.getElementById('observation');
   var text = textarea.value.trim();
   if (!text) { textarea.focus(); return; }
+  if (!authUser || !authUser.username) { handleAuthFailure(); return; }
 
   setAskMode(true);
 
   var submitBtn = document.getElementById('submitBtn');
   var askBtn = document.getElementById('askBtn');
   var loading = document.getElementById('loading');
+  var loadingText = loading.querySelector('span');
+  var originalLoadingText = loadingText ? loadingText.textContent : '';
   var errorMsg = document.getElementById('errorMsg');
   var results = document.getElementById('results');
 
   submitBtn.disabled = true;
   askBtn.disabled = true;
+  if (loadingText) loadingText.textContent = 'CARL is consulting the reference library...';
   loading.classList.add('visible');
   errorMsg.classList.remove('visible');
   results.classList.remove('visible');
 
+  var pollTimer = null;
+  var deadlineTimer = null;
+  var stopPolling = function() {
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    if (deadlineTimer) { clearTimeout(deadlineTimer); deadlineTimer = null; }
+  };
+  var finish = function() {
+    stopPolling();
+    submitBtn.disabled = false;
+    askBtn.disabled = false;
+    loading.classList.remove('visible');
+    if (loadingText) loadingText.textContent = originalLoadingText;
+    setAskMode(false);
+  };
+
+  // The "since" watermark is the moment we fired the request; only entries
+  // with processed_at strictly greater than this will be picked up as fresh.
+  var since = new Date().toISOString();
+
   try {
-    var controller = new AbortController();
-    var timeout = setTimeout(function() { controller.abort(); }, 180000);
+    var ackController = new AbortController();
+    var ackTimeout = setTimeout(function() { ackController.abort(); }, 30000);
 
     var payload = {
       observation: text,
       mode: 'query',
       notebook_url: getSelectedNotebookUrl(),
-      inspector_username: authUser ? authUser.username : null,
-      inspector_display_name: authUser ? authUser.display_name : null
+      inspector_username: authUser.username,
+      inspector_display_name: authUser.display_name || null
     };
 
     var resp = await fetch(WEBHOOK_URL, {
@@ -1564,40 +1940,61 @@ async function askObservation() {
       mode: 'cors',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
-      signal: controller.signal
+      signal: ackController.signal
     });
+    clearTimeout(ackTimeout);
 
-    clearTimeout(timeout);
+    if (resp.status === 401) { handleAuthFailure(); finish(); return; }
+    if (!resp.ok) throw new Error('Webhook returned HTTP ' + resp.status);
 
-    if (resp.status === 401) { handleAuthFailure(); return; }
+    var POLL_INTERVAL_MS = 4000;
+    var DEADLINE_MS = 180000;
 
-    if (!resp.ok) {
-      throw new Error('Webhook returned HTTP ' + resp.status);
-    }
+    var poll = async function() {
+      pollTimer = null;
+      try {
+        var r = await fetch(ASK_RESULT_URL, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ inspector_username: authUser.username, since: since })
+        });
+        if (r.status === 401) { handleAuthFailure(); finish(); return; }
+        if (r.ok) {
+          var d = await r.json();
+          if (d && d.entry) {
+            renderResults(d.entry, true);
+            finish();
+            return;
+          }
+        }
+      } catch (e) { /* transient; keep polling */ }
+      pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
+    };
 
-    var data = await resp.json();
+    deadlineTimer = setTimeout(function() {
+      stopPolling();
+      submitBtn.disabled = false;
+      askBtn.disabled = false;
+      loading.classList.remove('visible');
+      if (loadingText) loadingText.textContent = originalLoadingText;
+      setAskMode(false);
+      errorMsg.textContent = 'Timed out waiting for reference query (3 minutes). Try again shortly.';
+      errorMsg.classList.add('visible');
+    }, DEADLINE_MS);
 
-    if (data.error && !data.discipline) {
-      throw new Error(data.error);
-    }
-
-    renderResults(data, true);
+    pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
   } catch (err) {
     var msg = 'Request failed: ';
     if (err.name === 'AbortError') {
-      msg += 'Request timed out (180s). The server may be busy.';
-    } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      msg += 'Submission timed out. Check your network connection.';
+    } else if (err.message.indexOf('Failed to fetch') >= 0 || err.message.indexOf('NetworkError') >= 0) {
       msg += 'Unable to reach the CARL webhook. Check your network connection.';
     } else {
       msg += err.message;
     }
     errorMsg.textContent = msg;
     errorMsg.classList.add('visible');
-  } finally {
-    submitBtn.disabled = false;
-    askBtn.disabled = false;
-    loading.classList.remove('visible');
-    setAskMode(false);
+    finish();
   }
 }
 
