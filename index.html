@@ -994,10 +994,74 @@
   .admin-msg-ok { background: #dff5e1; color: #1f6a35; }
   .admin-msg-err { background: #f5d6d6; color: #8a2a2a; }
 
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .status-tile {
+    background: #fafaf5;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+  }
+  .status-tile-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .status-tile-value {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.05rem;
+    color: var(--text);
+    word-break: break-word;
+  }
+  .admin-inline-edit {
+    background: #fafaf5;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .admin-inline-edit input {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    margin-right: 6px;
+    min-width: 240px;
+  }
+  .admin-inline-edit-hint {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+  .admin-reset-reveal {
+    background: #fff7d6;
+    border: 1px solid #e6d18a;
+    border-radius: 3px;
+    padding: 10px 12px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+  }
+  .admin-reset-reveal code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.95rem;
+    background: #fff;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #e6d18a;
+    user-select: all;
+  }
+
   @media (max-width: 640px) {
     .admin-form-row { grid-template-columns: 1fr; }
     .admin-users-table { font-size: 0.78rem; }
     .admin-users-table th, .admin-users-table td { padding: 6px 6px; }
+    .status-grid { grid-template-columns: repeat(2, 1fr); }
+    .admin-inline-edit input { min-width: 0; width: 100%; margin-bottom: 6px; }
   }
 
   .daily-log { display: none; margin-top: 20px; }
@@ -1559,14 +1623,24 @@
     <div class="section-label">Administration</div>
 
     <div class="admin-section">
+      <h3>System Status</h3>
+      <div class="status-grid">
+        <div class="status-tile"><div class="status-tile-label">Pipeline Version</div><div class="status-tile-value" id="statPipelineVer">—</div></div>
+        <div class="status-tile"><div class="status-tile-label">Last Execution</div><div class="status-tile-value" id="statLastExec">—</div></div>
+        <div class="status-tile"><div class="status-tile-label">Active Inspectors</div><div class="status-tile-value" id="statActiveCount">—</div></div>
+        <div class="status-tile"><div class="status-tile-label">Current Sessions</div><div class="status-tile-value" id="statSessionCount">—</div></div>
+      </div>
+    </div>
+
+    <div class="admin-section">
       <h3>Inspector Accounts</h3>
       <div style="overflow-x:auto;">
         <table class="admin-users-table" id="adminUsersTable">
           <thead>
-            <tr><th>Username</th><th>Display Name</th><th>Title</th><th>Status</th><th>Actions</th></tr>
+            <tr><th>Username</th><th>Display Name</th><th>Title</th><th>Status</th><th>Last Login</th><th>Actions</th></tr>
           </thead>
           <tbody id="adminUsersTbody">
-            <tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:20px;">Loading…</td></tr>
+            <tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:20px;">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -1706,8 +1780,50 @@ async function toggleAdmin() {
   }
   if (dailyLog) dailyLog.classList.remove('visible');
   panel.classList.add('visible');
-  await loadAdminUsers();
+  await Promise.all([loadAdminUsers(), loadSystemStatus()]);
   panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function formatAdminTimestamp(ms) {
+  if (!ms) return 'Never';
+  try {
+    return new Date(ms).toLocaleString(undefined, {
+      year: 'numeric', month: 'short', day: '2-digit',
+      hour: '2-digit', minute: '2-digit'
+    });
+  } catch (e) { return '—'; }
+}
+
+async function loadSystemStatus() {
+  var today = new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Guam' });
+  var verEl = document.getElementById('statPipelineVer');
+  var execEl = document.getElementById('statLastExec');
+  var sessEl = document.getElementById('statSessionCount');
+
+  try {
+    var dr = await fetch(DAILY_REPORT_URL, {
+      method: 'POST',
+      mode: 'cors',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ action: 'get', date: today })
+    });
+    if (dr.ok) {
+      var data = await dr.json();
+      var entries = (data.entries || []).slice().sort(function(a, b) {
+        return new Date(b.processed_at || 0) - new Date(a.processed_at || 0);
+      });
+      var latest = entries[0];
+      if (verEl) verEl.textContent = (latest && latest.pipeline_version) || '—';
+      if (execEl) execEl.textContent = latest ? formatAdminTimestamp(new Date(latest.processed_at).getTime()) : 'No entries today';
+    }
+  } catch (e) { /* leave tiles as '—' */ }
+
+  try {
+    var s = await adminFetch('/admin/sessions', { method: 'GET' });
+    if (sessEl) sessEl.textContent = String(s.count);
+  } catch (e) {
+    if (e.message !== 'auth' && sessEl) sessEl.textContent = '—';
+  }
 }
 
 function adminShowMsg(elId, text, ok) {
@@ -1735,20 +1851,28 @@ async function adminFetch(path, opts) {
 
 async function loadAdminUsers() {
   var tbody = document.getElementById('adminUsersTbody');
-  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:20px;">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:20px;">Loading…</td></tr>';
   try {
     var data = await adminFetch('/admin/users', { method: 'GET' });
     renderAdminUsers(data.users || []);
   } catch (err) {
     if (err.message === 'auth') return;
-    tbody.innerHTML = '<tr><td colspan="5" style="color:#8a2a2a;padding:14px;">Failed to load users: ' + escapeHtml(err.message) + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="color:#8a2a2a;padding:14px;">Failed to load users: ' + escapeHtml(err.message) + '</td></tr>';
   }
 }
 
+var __adminUsersCache = {};
+
 function renderAdminUsers(users) {
   var tbody = document.getElementById('adminUsersTbody');
+  var activeCount = users.filter(function(u) { return u.active; }).length;
+  var activeEl = document.getElementById('statActiveCount');
+  if (activeEl) activeEl.textContent = String(activeCount);
+  __adminUsersCache = {};
+  users.forEach(function(u) { __adminUsersCache[u.username] = u; });
+
   if (!users.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:20px;">No users.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:20px;">No users.</td></tr>';
     return;
   }
   var rows = users.map(function(u) {
@@ -1756,31 +1880,166 @@ function renderAdminUsers(users) {
     var badge = u.active
       ? '<span class="admin-badge admin-badge-active">Active</span>'
       : '<span class="admin-badge admin-badge-inactive">Inactive</span>';
-    var changePwBtn = '<button class="admin-btn" onclick="changePassword(\'' + escapeAttr(u.username) + '\')">Change Password</button>';
-    var changeNameBtn = '<button class="admin-btn" onclick="changeDisplayName(\'' + escapeAttr(u.username) + '\', \'' + escapeAttr(u.display_name || '') + '\')">Change Display Name</button>';
+    var lastLogin = formatAdminTimestamp(u.last_login);
+    var uAttr = escapeAttr(u.username);
+    var showPwBtn     = '<button class="admin-btn" id="showPwBtn_' + uAttr + '" onclick="togglePassword(\'' + uAttr + '\')">Show Password</button>';
+    var resetPwBtn    = '<button class="admin-btn" onclick="beginResetPassword(\'' + uAttr + '\')">Reset Password</button>';
+    var changeNameBtn = '<button class="admin-btn" onclick="beginChangeDisplayName(\'' + uAttr + '\', \'' + escapeAttr(u.display_name || '') + '\')">Change Display Name</button>';
+    var changeTitleBtn = '<button class="admin-btn" onclick="beginChangeTitle(\'' + uAttr + '\', \'' + escapeAttr(u.title || '') + '\')">Change Title</button>';
     var toggleBtn;
     if (isShepherd) {
       toggleBtn = '';
     } else if (u.active) {
-      toggleBtn = '<button class="admin-btn admin-btn-danger" onclick="toggleActive(\'' + escapeAttr(u.username) + '\', false)">Deactivate</button>';
+      toggleBtn = '<button class="admin-btn admin-btn-danger" onclick="toggleActive(\'' + uAttr + '\', false)">Deactivate</button>';
     } else {
-      toggleBtn = '<button class="admin-btn admin-btn-success" onclick="toggleActive(\'' + escapeAttr(u.username) + '\', true)">Reactivate</button>';
+      toggleBtn = '<button class="admin-btn admin-btn-success" onclick="toggleActive(\'' + uAttr + '\', true)">Reactivate</button>';
     }
-    return '<tr class="' + (u.active ? '' : 'inactive') + '">'
+    var rowId = 'adminRow_' + u.username;
+    return '<tr id="' + escapeAttr(rowId) + '" class="' + (u.active ? '' : 'inactive') + '">'
       + '<td class="admin-username">' + escapeHtml(u.username) + '</td>'
       + '<td>' + escapeHtml(u.display_name || '') + '</td>'
       + '<td>' + escapeHtml(u.title || '') + '</td>'
       + '<td>' + badge + '</td>'
-      + '<td class="admin-actions">' + changePwBtn + changeNameBtn + toggleBtn + '</td>'
-      + '</tr>';
+      + '<td>' + escapeHtml(lastLogin) + '</td>'
+      + '<td class="admin-actions">' + showPwBtn + resetPwBtn + changeNameBtn + changeTitleBtn + toggleBtn + '</td>'
+      + '</tr>'
+      + '<tr id="' + escapeAttr(rowId) + '_edit" style="display:none;"><td colspan="6" class="admin-inline-edit" id="' + escapeAttr(rowId) + '_editBody"></td></tr>';
   });
   tbody.innerHTML = rows.join('');
 }
 
-async function changeDisplayName(username, current) {
-  var name = prompt('New display name for ' + username + ' (1-60 characters):', current || '');
-  if (name === null) return;
-  name = String(name).trim();
+function cancelInlineEdit(username) {
+  var row = document.getElementById('adminRow_' + username + '_edit');
+  var body = document.getElementById('adminRow_' + username + '_editBody');
+  var btn = document.getElementById('showPwBtn_' + username);
+  if (body) { body.innerHTML = ''; body.removeAttribute('data-mode'); }
+  if (row) row.style.display = 'none';
+  if (btn) btn.textContent = 'Show Password';
+}
+
+function togglePassword(username) {
+  var body = document.getElementById('adminRow_' + username + '_editBody');
+  var row = document.getElementById('adminRow_' + username + '_edit');
+  var btn = document.getElementById('showPwBtn_' + username);
+  if (!body || !row) return;
+  if (row.style.display !== 'none' && body.getAttribute('data-mode') === 'showpw') {
+    body.innerHTML = '';
+    body.removeAttribute('data-mode');
+    row.style.display = 'none';
+    if (btn) btn.textContent = 'Show Password';
+    return;
+  }
+  var u = __adminUsersCache[username];
+  var pw = u ? u.password_plain : null;
+  var html;
+  if (pw) {
+    html = '<strong>Password for ' + escapeHtml(username) + ':</strong> ' +
+           '<code style="font-family:\'SF Mono\',Menlo,Consolas,monospace;background:#fff;padding:2px 6px;border:1px solid var(--border);border-radius:3px;user-select:all;">' +
+           escapeHtml(pw) + '</code>';
+  } else {
+    html = '<span style="color:var(--text-secondary);">Reset required \u2014 no stored plaintext for this user. Use Reset Password to generate a new one.</span>';
+  }
+  body.innerHTML = html;
+  body.setAttribute('data-mode', 'showpw');
+  row.style.display = '';
+  if (btn) btn.textContent = 'Hide Password';
+}
+
+function beginResetPassword(username) {
+  var body = document.getElementById('adminRow_' + username + '_editBody');
+  var row = document.getElementById('adminRow_' + username + '_edit');
+  if (!body || !row) return;
+  body.innerHTML =
+    '<strong>Reset password for ' + escapeHtml(username) + '?</strong><br>' +
+    '<span class="admin-inline-edit-hint">A new random password will be generated and shown once. Their existing sessions will be invalidated.</span>' +
+    '<div style="margin-top:8px;">' +
+      '<button class="admin-btn admin-btn-danger" onclick="submitResetPassword(\'' + escapeAttr(username) + '\')">Generate New Password</button>' +
+      '<button class="admin-btn" onclick="cancelInlineEdit(\'' + escapeAttr(username) + '\')">Cancel</button>' +
+    '</div>';
+  row.style.display = '';
+}
+
+async function submitResetPassword(username) {
+  try {
+    var r = await adminFetch('/admin/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ username: username })
+    });
+    if (__adminUsersCache[username]) __adminUsersCache[username].password_plain = r.password;
+    var body = document.getElementById('adminRow_' + username + '_editBody');
+    if (body) {
+      body.innerHTML =
+        '<div class="admin-reset-reveal">' +
+          '<strong>New password for ' + escapeHtml(username) + ':</strong> ' +
+          '<code>' + escapeHtml(r.password || '') + '</code><br>' +
+          '<span class="admin-inline-edit-hint">Copy this now \u2014 it will not be shown again. Deliver securely to the inspector.</span>' +
+          '<div style="margin-top:8px;"><button class="admin-btn" onclick="cancelInlineEdit(\'' + escapeAttr(username) + '\')">Done</button></div>' +
+        '</div>';
+    }
+    adminShowMsg('adminUsersMsg', 'Password reset for ' + username + '.', true);
+  } catch (err) {
+    if (err.message === 'auth') return;
+    adminShowMsg('adminUsersMsg', 'Error: ' + err.message, false);
+  }
+}
+
+function beginChangeDisplayName(username, current) {
+  var body = document.getElementById('adminRow_' + username + '_editBody');
+  var row = document.getElementById('adminRow_' + username + '_edit');
+  if (!body || !row) return;
+  body.innerHTML =
+    '<strong>Change display name for ' + escapeHtml(username) + ':</strong><br>' +
+    '<input type="text" id="inlineDn_' + escapeAttr(username) + '" value="' + escapeAttr(current || '') + '" placeholder="Display name" maxlength="60">' +
+    '<button class="admin-btn admin-btn-success" onclick="submitChangeDisplayName(\'' + escapeAttr(username) + '\')">Save</button>' +
+    '<button class="admin-btn" onclick="cancelInlineEdit(\'' + escapeAttr(username) + '\')">Cancel</button>' +
+    '<span class="admin-inline-edit-hint">1\u201360 characters.</span>';
+  row.style.display = '';
+  var input = document.getElementById('inlineDn_' + username);
+  if (input) { input.focus(); input.select(); }
+}
+
+function beginChangeTitle(username, current) {
+  var body = document.getElementById('adminRow_' + username + '_editBody');
+  var row = document.getElementById('adminRow_' + username + '_edit');
+  if (!body || !row) return;
+  body.innerHTML =
+    '<strong>Change title for ' + escapeHtml(username) + ':</strong><br>' +
+    '<input type="text" id="inlineTitle_' + escapeAttr(username) + '" value="' + escapeAttr(current || '') + '" placeholder="Title" maxlength="80">' +
+    '<button class="admin-btn admin-btn-success" onclick="submitChangeTitle(\'' + escapeAttr(username) + '\')">Save</button>' +
+    '<button class="admin-btn" onclick="cancelInlineEdit(\'' + escapeAttr(username) + '\')">Cancel</button>' +
+    '<span class="admin-inline-edit-hint">1\u201380 characters.</span>';
+  row.style.display = '';
+  var input = document.getElementById('inlineTitle_' + username);
+  if (input) { input.focus(); input.select(); }
+}
+
+async function submitChangeTitle(username) {
+  var input = document.getElementById('inlineTitle_' + username);
+  var title = input ? String(input.value).trim() : '';
+  if (!title) {
+    adminShowMsg('adminUsersMsg', 'Title cannot be empty.', false);
+    return;
+  }
+  if (title.length > 80) {
+    adminShowMsg('adminUsersMsg', 'Title must be 80 characters or fewer.', false);
+    return;
+  }
+  try {
+    await adminFetch('/admin/change-title', {
+      method: 'POST',
+      body: JSON.stringify({ username: username, title: title })
+    });
+    adminShowMsg('adminUsersMsg', 'Title updated for ' + username + '.', true);
+    await loadAdminUsers();
+  } catch (err) {
+    if (err.message === 'auth') return;
+    adminShowMsg('adminUsersMsg', 'Error: ' + err.message, false);
+  }
+}
+
+async function submitChangeDisplayName(username) {
+  var input = document.getElementById('inlineDn_' + username);
+  var name = input ? String(input.value).trim() : '';
   if (!name) {
     adminShowMsg('adminUsersMsg', 'Display name cannot be empty.', false);
     return;
@@ -1796,26 +2055,6 @@ async function changeDisplayName(username, current) {
     });
     adminShowMsg('adminUsersMsg', 'Display name updated for ' + username + '.', true);
     await loadAdminUsers();
-  } catch (err) {
-    if (err.message === 'auth') return;
-    adminShowMsg('adminUsersMsg', 'Error: ' + err.message, false);
-  }
-}
-
-async function changePassword(username) {
-  var pw = prompt('New password for ' + username + ' (min 8 characters):');
-  if (pw === null) return;
-  pw = String(pw);
-  if (pw.length < 8) {
-    adminShowMsg('adminUsersMsg', 'Password must be at least 8 characters.', false);
-    return;
-  }
-  try {
-    await adminFetch('/admin/change-password', {
-      method: 'POST',
-      body: JSON.stringify({ username: username, password: pw })
-    });
-    adminShowMsg('adminUsersMsg', 'Password updated for ' + username + '.', true);
   } catch (err) {
     if (err.message === 'auth') return;
     adminShowMsg('adminUsersMsg', 'Error: ' + err.message, false);
@@ -2008,7 +2247,7 @@ async function fetchTodayLogEntries() {
   var resp = await fetch(DAILY_REPORT_URL, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ date: new Date().toISOString().split('T')[0] })
+    body: JSON.stringify({ date: new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Guam' }) })
   });
   if (resp.status === 401) { handleAuthFailure(); throw new Error('auth'); }
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -2108,7 +2347,7 @@ async function submitObservation() {
 
     var POLL_INTERVAL_MS = 4000;
     var DEADLINE_MS = 180000;
-    var todayStr = new Date().toISOString().split('T')[0];
+    var todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Guam' });
 
     var poll = async function() {
       pollTimer = null;
@@ -2631,7 +2870,7 @@ async function loadDailyLog() {
     var resp = await fetch(DAILY_REPORT_URL, {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ date: new Date().toISOString().split('T')[0] })
+      body: JSON.stringify({ date: new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Guam' }) })
     });
 
     if (resp.status === 401) { handleAuthFailure(); return; }
@@ -2921,7 +3160,7 @@ function downloadLightboxImage(e) {
   e.stopPropagation();
   var src = lightboxMeta.src || '';
   var now = new Date();
-  var dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
+  var dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Pacific/Guam' }).replace(/-/g, '');
   var timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '');
   var disc = (lastResultData && lastResultData.discipline) ? lastResultData.discipline.replace(/\s+/g, '_') : 'observation';
   var filename = 'CARL_' + dateStr + '_' + timeStr + '_' + disc + '.jpg';
@@ -2935,7 +3174,7 @@ function downloadLightboxImage(e) {
 
 // Shift Report Export
 async function exportShiftReport() {
-  var today = new Date().toISOString().split('T')[0];
+  var today = new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Guam' });
   var reportDiv = document.getElementById('shiftReport');
 
   try {
