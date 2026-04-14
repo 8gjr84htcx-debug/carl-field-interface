@@ -712,9 +712,9 @@
   }
 
   .eval-COMPLIANT { background: #2e8b57; color: #fff; }
-  .eval-CONFIRMED { background: var(--confirmed); color: #fff; }
-  .eval-CHALLENGED { background: var(--challenged); color: #fff; }
-  .eval-INSUFFICIENT { background: var(--insufficient); color: #fff; }
+  .eval-CONFIRMED { background: #8B1A1A; color: #fff; }
+  .eval-CHALLENGED { background: #cc7a00; color: #fff; }
+  .eval-INSUFFICIENT { background: #cc7a00; color: #fff; }
 
   .result-body { padding: 16px 18px; }
 
@@ -775,6 +775,9 @@
   .prov-loop { color: var(--confirmed); }
   .prov-triple { color: var(--gold); }
   .prov-parametric { color: var(--parametric); }
+  .prov-confirmed    { background: var(--confirmed); color: #fff; padding: 2px 8px; border-radius: 3px; }
+  .prov-verified     { color: var(--confirmed); }
+  .prov-needs-review { color: var(--gold); }
 
   /* Verification badges */
   .verification-badge {
@@ -794,6 +797,9 @@
   .badge-triple { background: var(--confirmed); color: #fff; }
   .badge-ref { background: #999; color: #fff; }
   .badge-unverified { background: #bbb; color: #fff; font-style: italic; }
+  .badge-confirmed    { background: var(--confirmed); color: #fff; }
+  .badge-verified     { color: var(--confirmed); background: transparent; border: 1px solid var(--confirmed); }
+  .badge-needs-review { color: var(--gold);      background: transparent; border: 1px solid var(--gold); }
 
   /* Citations list */
   .citations-section { margin-top: 16px; }
@@ -2230,8 +2236,9 @@ function renderResults(d, isQuery) {
       var source = (c.sourceName || 'Unknown') + ' ' + (c.section || '');
       var req = c.requirement || '';
       var status = c.verification_status || '';
-      var badgeClass = status === 'DUAL CONFIRMED' ? 'badge-dual' :
-                       status === 'TRIPLE CONFIRMED' ? 'badge-triple' :
+      var badgeClass = status.includes('CONFIRMED') ? 'badge-confirmed' :
+                       status.includes('VERIFIED') ? 'badge-verified' :
+                       status.includes('NEEDS REVIEW') ? 'badge-needs-review' :
                        status === 'UNVERIFIED' ? 'badge-unverified' : 'badge-ref';
       var confDisplay = (typeof c.verification_confidence === 'number') ? ' ' + c.verification_confidence.toFixed(2) : '';
       var displayStatus = displayVerificationStatus(status);
@@ -2256,10 +2263,15 @@ function renderResults(d, isQuery) {
   var prov = document.getElementById('rProvenance');
   prov.textContent = displayProvenance(d.provenance);
   prov.className = 'field-value provenance';
-  if (evalType === 'COMPLIANT') prov.classList.add('prov-compliant');
-  else if (d.provenance === 'TRIPLE CONFIRMED') prov.classList.add('prov-triple');
-  else if (d.provenance === 'LOOP CONFIRMED') prov.classList.add('prov-loop');
-  else if (d.provenance && d.provenance.includes('PARAMETRIC')) prov.classList.add('prov-parametric');
+  if (evalType === 'COMPLIANT') {
+    prov.classList.add('prov-compliant');
+  } else if (d.provenance && d.provenance.includes('CONFIRMED')) {
+    prov.classList.add('prov-confirmed');
+  } else if (d.provenance && d.provenance.includes('VERIFIED')) {
+    prov.classList.add('prov-verified');
+  } else if (d.provenance && d.provenance.includes('NEEDS REVIEW')) {
+    prov.classList.add('prov-needs-review');
+  }
 
   document.getElementById('rRationale').textContent = d.evaluation_rationale || '—';
 
@@ -2667,10 +2679,9 @@ async function loadDailyLog() {
         var prov = e.provenance || '';
         var citeEval = e.citation_evaluation || '';
         if (citeEval === 'COMPLIANT') provClass = 'log-prov-compliant';
-        else if (prov === 'TRIPLE CONFIRMED') provClass = 'log-prov-triple';
-        else if (prov === 'DUAL CONFIRMED') provClass = 'log-prov-dual';
-        else if (prov.includes('PARAMETRIC')) provClass = 'log-prov-parametric';
-        else if (prov.includes('TIEBREAKER')) provClass = 'log-prov-dual';
+        else if (prov.includes('CONFIRMED')) provClass = 'log-prov-triple';
+        else if (prov.includes('VERIFIED')) provClass = 'log-prov-dual';
+        else if (prov.includes('NEEDS REVIEW')) provClass = 'log-prov-parametric';
 
         var entryId = 'logEntry' + idx;
         html += '<div class="log-entry" id="' + entryId + '">';
@@ -2725,8 +2736,9 @@ async function loadDailyLog() {
             html += '<div class="log-detail-cite">';
             var src = (c.sourceName || 'Unknown') + ' ' + (c.section || '');
             var vstatus = c.verification_status || '';
-            var vbadgeClass = vstatus === 'DUAL CONFIRMED' ? 'badge-dual' :
-                              vstatus === 'TRIPLE CONFIRMED' ? 'badge-triple' :
+            var vbadgeClass = vstatus.includes('CONFIRMED') ? 'badge-confirmed' :
+                              vstatus.includes('VERIFIED') ? 'badge-verified' :
+                              vstatus.includes('NEEDS REVIEW') ? 'badge-needs-review' :
                               vstatus === 'UNVERIFIED' ? 'badge-unverified' : 'badge-ref';
             var vconf = (typeof c.verification_confidence === 'number') ? ' ' + c.verification_confidence.toFixed(2) : '';
             var vdisplay = displayVerificationStatus(vstatus);
@@ -2814,20 +2826,21 @@ async function deleteLogEntry(processedAt) {
 // Display translations for internal pipeline terms
 function displayProvenance(prov) {
   if (!prov) return '—';
-  if (prov === 'TRIPLE CONFIRMED') return 'Primary — Dual Verified';
-  if (prov === 'LOOP CONFIRMED') return 'Primary — Verified';
-  if (prov === 'DUAL CONFIRMED') return 'Standards — Dual Verified';
-  if (prov === 'TIEBREAKER CONFIRMED') return 'Conflict Resolved';
-  if (prov.includes('TIEBREAKER REJECTED')) return 'Conflict — Verify';
-  if (prov.includes('PARAMETRIC')) return 'Standards — Verify';
+  if (prov === 'LIBRARY -- CONFIRMED') return 'Library — Confirmed';
+  if (prov === 'LIBRARY -- VERIFIED') return 'Library — Verified';
+  if (prov === 'LIBRARY -- NEEDS REVIEW') return 'Library — Needs Review';
+  if (prov === 'REFERENCE -- VERIFIED') return 'Reference — Verified';
+  if (prov === 'REFERENCE -- NEEDS REVIEW') return 'Reference — Needs Review';
   return prov;
 }
 
 function displayVerificationStatus(status) {
   if (!status) return '';
-  if (status === 'DUAL CONFIRMED') return 'Standards — Dual Verified';
-  if (status === 'TRIPLE CONFIRMED') return 'Primary — Dual Verified';
-  if (status === 'REFERENCE ONLY') return 'Standards — Verified';
+  if (status === 'LIBRARY -- CONFIRMED') return 'Library — Confirmed';
+  if (status === 'LIBRARY -- VERIFIED') return 'Library — Verified';
+  if (status === 'LIBRARY -- NEEDS REVIEW') return 'Library — Needs Review';
+  if (status === 'REFERENCE -- VERIFIED') return 'Reference — Verified';
+  if (status === 'REFERENCE -- NEEDS REVIEW') return 'Reference — Needs Review';
   if (status === 'UNVERIFIED') return 'Pending Verification';
   return status;
 }
@@ -2976,9 +2989,9 @@ async function exportShiftReport() {
     h += '.sr-entry-header h4 { font-size: 11pt; margin: 0; }';
     h += '.sr-badge { font-size: 8pt; font-weight: 800; padding: 2px 10px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.05em; }';
     h += '.sr-badge-COMPLIANT { background: #2e8b57; color: #fff; }';
-    h += '.sr-badge-CONFIRMED { background: #1b6e2a; color: #fff; }';
-    h += '.sr-badge-CHALLENGED { background: #8b6914; color: #fff; }';
-    h += '.sr-badge-INSUFFICIENT { background: #a02020; color: #fff; }';
+    h += '.sr-badge-CONFIRMED { background: #8B1A1A; color: #fff; }';
+    h += '.sr-badge-CHALLENGED { background: #cc7a00; color: #fff; }';
+    h += '.sr-badge-INSUFFICIENT { background: #cc7a00; color: #fff; }';
     h += '.sr-entry-body { padding: 10px 14px; }';
     h += '.sr-field-row { padding: 6px 0; border-bottom: 1px solid #eee; }';
     h += '.sr-field-row:last-child { border-bottom: none; }';
@@ -2992,6 +3005,9 @@ async function exportShiftReport() {
     h += '.sr-vb-triple { background: #1b6e2a; color: #fff; }';
     h += '.sr-vb-ref { background: #999; color: #fff; }';
     h += '.sr-vb-unverified { background: #bbb; color: #fff; font-style: italic; }';
+    h += '.sr-vb-confirmed    { background: #1b6e2a; color: #fff; }';
+    h += '.sr-vb-verified     { background: transparent; color: #1b6e2a; border: 1px solid #1b6e2a; }';
+    h += '.sr-vb-needs-review { background: transparent; color: #8b6914; border: 1px solid #8b6914; }';
     h += '.sr-thumb { max-width: 180px; max-height: 140px; border-radius: 4px; border: 1px solid #ccc; margin-top: 4px; }';
     h += '.sr-prov { font-size: 9pt; font-weight: 700; color: #555; text-align: right; padding-top: 6px; }';
     h += '.sr-footer { font-size: 8pt; color: #999; text-align: center; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 10px; }';
@@ -3051,8 +3067,9 @@ async function exportShiftReport() {
           h += '<div class="sr-cite-block">';
           var src = (c.sourceName || '') + ' ' + (c.section || '');
           var vstatus = c.verification_status || '';
-          var vbClass = vstatus === 'DUAL CONFIRMED' ? 'sr-vb-dual' :
-                        vstatus === 'TRIPLE CONFIRMED' ? 'sr-vb-triple' :
+          var vbClass = vstatus.includes('CONFIRMED') ? 'sr-vb-confirmed' :
+                        vstatus.includes('VERIFIED') ? 'sr-vb-verified' :
+                        vstatus.includes('NEEDS REVIEW') ? 'sr-vb-needs-review' :
                         vstatus === 'UNVERIFIED' ? 'sr-vb-unverified' : 'sr-vb-ref';
           var vconf = (typeof c.verification_confidence === 'number') ? ' ' + c.verification_confidence.toFixed(2) : '';
           var vdisplaySr = displayVerificationStatus(vstatus);
