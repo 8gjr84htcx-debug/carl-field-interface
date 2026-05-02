@@ -2950,6 +2950,9 @@ async function loadDailyLog() {
         }
         html += '</span>';
         html += '</div>';
+        if (e.building_number) {
+          html += '<div class="log-entry-time" style="margin-bottom:4px;"><strong>Bldg/Project:</strong> ' + escapeHtml(e.building_number) + '</div>';
+        }
         html += '<div class="log-entry-obs">' + escapeHtml((e.observation_text || '').substring(0, 200)) + '</div>';
         if (e.primary_regulatory_citation) {
           html += '<div class="log-entry-cite">' + escapeHtml(e.primary_regulatory_citation) + '</div>';
@@ -2959,6 +2962,14 @@ async function loadDailyLog() {
 
         // Expanded detail
         html += '<div class="log-entry-detail">';
+
+        // Building / project number
+        if (e.building_number) {
+          html += '<div class="log-detail-field">';
+          html += '<div class="log-detail-label">Building / Project Number</div>';
+          html += '<div class="log-detail-value">' + escapeHtml(e.building_number) + '</div>';
+          html += '</div>';
+        }
 
         // Full description
         var descLabel = citeEval === 'COMPLIANT' ? 'Compliance Observation' :
@@ -3301,6 +3312,12 @@ async function exportShiftReport() {
       h += '<span class="sr-badge sr-badge-' + citeEval + '">' + escapeHtml(displayEvalType(citeEval)) + '</span>';
       h += '</div>';
       h += '<div class="sr-entry-body">';
+
+      // Building / project number
+      if (e.building_number) {
+        h += '<div class="sr-field-row"><div class="sr-label">Building / Project Number</div>';
+        h += '<div class="sr-value">' + escapeHtml(e.building_number) + '</div></div>';
+      }
 
       // Description
       h += '<div class="sr-field-row"><div class="sr-label">' + escapeHtml(descLabel) + '</div>';
