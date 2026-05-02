@@ -1519,6 +1519,8 @@
 
 <main>
   <div style="margin-bottom: 20px;">
+    <div class="section-label">Building / Project Number</div>
+    <input type="text" id="buildingNumber" placeholder="Enter building or project number..." autocomplete="off" style="margin-bottom:12px;">
     <div class="section-label">Field Observation</div>
     <textarea id="observation" placeholder="Enter field observation..." autocomplete="off" spellcheck="true"></textarea>
     <div class="photo-preview" id="photoPreview">
@@ -1552,6 +1554,10 @@
       </div>
       <div class="query-banner" id="queryBanner">Reference Query -- Not for Inspection Record</div>
       <div class="result-body">
+        <div class="field">
+          <div class="field-label">Project / Building Number</div>
+          <div class="field-value" id="rBuildingNumber"></div>
+        </div>
         <div class="field">
           <div class="field-label">Discipline</div>
           <div class="field-value" id="rDiscipline"></div>
@@ -2281,6 +2287,9 @@ function evalHeaderTitle(evalType) {
 }
 
 async function submitObservation() {
+  var buildingInput = document.getElementById('buildingNumber');
+  var buildingNumber = buildingInput.value.trim();
+  if (!buildingNumber) { buildingInput.focus(); buildingInput.style.borderColor = '#c0392b'; setTimeout(function() { buildingInput.style.borderColor = ''; }, 2000); return; }
   var textarea = document.getElementById('observation');
   var text = textarea.value.trim();
   if (!text) { textarea.focus(); return; }
@@ -2323,7 +2332,7 @@ async function submitObservation() {
     var ackController = new AbortController();
     var ackTimeout = setTimeout(function() { ackController.abort(); }, 30000);
 
-    var payload = { observation: text };
+    var payload = { observation: text, building_number: buildingNumber };
     if (attachedPhotoBase64) {
       payload.image = attachedPhotoBase64;
       payload.image_thumbnail = attachedThumbBase64;
@@ -2360,6 +2369,7 @@ async function submitObservation() {
         });
         if (fresh.length > 0) {
           fresh.sort(function(a, b) { return new Date(b.processed_at) - new Date(a.processed_at); });
+          console.log('[CARL poll] new entry detected:', JSON.stringify(fresh[0], null, 2));
           renderResults(adaptLogEntryForRender(fresh[0]));
           finish();
           return;
@@ -2396,6 +2406,7 @@ async function submitObservation() {
 }
 
 function renderResults(d, isQuery) {
+  console.log('[CARL renderResults] called with arguments:', Array.from(arguments));
   var results = document.getElementById('results');
   var header = document.getElementById('resultHeader');
   var headerTitle = document.getElementById('resultHeaderTitle');
@@ -2418,6 +2429,7 @@ function renderResults(d, isQuery) {
     if (addCitSection) addCitSection.style.display = 'none';
     if (photoField) photoField.style.display = 'none';
 
+    document.getElementById('rBuildingNumber').textContent = d.building_number || '—';
     document.getElementById('rDiscipline').textContent = d.discipline || '—';
     document.getElementById('rDescriptionLabel').textContent = 'Response';
     var responseText = d.response || d.response_text || d.answer ||
@@ -2456,6 +2468,7 @@ function renderResults(d, isQuery) {
                   'Observation Summary';
   document.getElementById('rDescriptionLabel').textContent = descLabel;
 
+  document.getElementById('rBuildingNumber').textContent = d.building_number || '—';
   document.getElementById('rDiscipline').textContent = d.discipline || '—';
   document.getElementById('rDescription').textContent = d.non_conformance_description || d.observation_summary || '—';
   document.getElementById('rCitation').textContent = d.primary_regulatory_citation || '—';
@@ -2556,6 +2569,7 @@ function escapeHtml(str) {
 
 function clearAll() {
   document.getElementById('observation').value = '';
+  document.getElementById('buildingNumber').value = '';
   document.getElementById('results').classList.remove('visible');
   document.getElementById('errorMsg').classList.remove('visible');
   removePhoto();
