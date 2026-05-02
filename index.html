@@ -2176,7 +2176,7 @@ async function askObservation() {
 
   try {
     var ackController = new AbortController();
-    var ackTimeout = setTimeout(function() { ackController.abort(); }, 30000);
+    var ackTimeout = setTimeout(function() { ackController.abort(); }, 180000);
 
     var payload = {
       observation: text,
@@ -2330,7 +2330,7 @@ async function submitObservation() {
     preEntries.forEach(function(e) { if (e.processed_at) preIds[e.processed_at] = true; });
 
     var ackController = new AbortController();
-    var ackTimeout = setTimeout(function() { ackController.abort(); }, 30000);
+    var ackTimeout = setTimeout(function() { ackController.abort(); }, 180000);
 
     var payload = { observation: text, building_number: buildingNumber };
     if (attachedPhotoBase64) {
