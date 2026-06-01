@@ -12,7 +12,7 @@
  * (keyPath "id"), items { id, status, payload, idempotencyKey, createdAt, result }.
  * Bump SHELL_CACHE when shell assets change to force an update.
  */
-const SHELL_CACHE = 'carl-shell-v2';
+const SHELL_CACHE = 'carl-shell-v3';
 const WEBHOOK_URL = 'https://n8n.carlcompliance.com/webhook/carl-verify';
 
 const SHELL_ASSETS = [
