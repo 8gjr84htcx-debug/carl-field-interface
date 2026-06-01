@@ -1478,6 +1478,116 @@
   .q-status.done { background:#d6ecd9; color:#1b6e2a; }
   .q-status.error { background:#f3d6d6; color:#a02020; }
   .panel-empty { font-size:0.82rem; color:var(--label); padding:8px 0; }
+
+  /* ---- Settings ---- */
+  .user-actions { display:flex; flex-direction:column; gap:6px; align-items:stretch; }
+  .btn-settings {
+    background: transparent;
+    color: #c9a84c;
+    border: 1px solid #c9a84c;
+    border-radius: 3px;
+    padding: 6px 14px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .btn-settings:hover { background: #c9a84c; color: #1c2b4a; }
+
+  .settings-panel { display:none; margin-top:20px; }
+  .settings-panel.visible { display:block; }
+  .settings-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .settings-head .section-label { margin:0; }
+  .btn-settings-close {
+    background:transparent; border:1px solid var(--border); color:var(--text-secondary);
+    border-radius:3px; padding:5px 12px; font-size:0.72rem; font-weight:600; letter-spacing:0.06em;
+    text-transform:uppercase; cursor:pointer;
+  }
+  .btn-settings-close:hover { background:#f3f3ee; }
+
+  .settings-field { margin-bottom:14px; }
+  .settings-field:last-child { margin-bottom:0; }
+  .settings-field label {
+    display:block; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em;
+    color:var(--text-secondary); margin-bottom:5px;
+  }
+  .settings-field input[type="text"] {
+    width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:3px;
+    font-size:0.95rem; font-family:inherit; background:var(--input-bg); color:var(--text);
+  }
+  .settings-field input[type="text"]:focus { outline:none; border-color:var(--accent); }
+  .settings-hint { font-size:0.72rem; color:var(--label); margin-top:6px; line-height:1.4; }
+
+  .settings-btn {
+    background:var(--accent); color:#fff; padding:9px 18px; font-size:0.85rem;
+    letter-spacing:0.06em; border:none; border-radius:3px; cursor:pointer; font-family:inherit;
+  }
+  .settings-btn:hover { background:var(--accent-hover); }
+  .settings-btn:disabled { opacity:0.5; cursor:default; }
+  .settings-btn-outline {
+    background:transparent; color:var(--accent); border:1px solid var(--accent);
+  }
+  .settings-btn-outline:hover { background:var(--citation-bg,#f0ede4); }
+  .settings-btn-danger { background:transparent; color:#a02020; border:1px solid #d8b4b4; }
+  .settings-btn-danger:hover { background:#fbecec; }
+  .settings-btn-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:4px; }
+
+  .settings-msg { font-size:0.8rem; margin-top:10px; display:none; }
+  .settings-msg.visible { display:block; }
+  .settings-msg-ok { color:#1f6a35; }
+  .settings-msg-err { color:#8a2a2a; }
+
+  /* Toggle rows */
+  .toggle-row {
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    padding:12px 0; border-bottom:1px solid #e8e5de;
+  }
+  .toggle-row:last-child { border-bottom:none; }
+  .toggle-row .toggle-label { font-size:0.9rem; color:var(--text); }
+  .toggle-row .toggle-sub { font-size:0.72rem; color:var(--label); margin-top:2px; }
+  .toggle-switch { position:relative; flex-shrink:0; width:46px; height:26px; }
+  .toggle-switch input { position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; }
+  .toggle-track {
+    position:absolute; inset:0; background:#cfc9bd; border-radius:13px; transition:background 0.18s;
+    pointer-events:none;
+  }
+  .toggle-track::after {
+    content:""; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%;
+    background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.3); transition:transform 0.18s;
+  }
+  .toggle-switch input:checked + .toggle-track { background:var(--gold); }
+  .toggle-switch input:checked + .toggle-track::after { transform:translateX(20px); }
+
+  /* Storage meter */
+  .storage-meter { margin-top:8px; }
+  .storage-bar { height:8px; background:#e8e5de; border-radius:4px; overflow:hidden; }
+  .storage-bar > span { display:block; height:100%; background:var(--gold); width:0; transition:width 0.3s; }
+  .storage-text { font-size:0.78rem; color:var(--text-secondary); margin-top:6px; font-variant-numeric:tabular-nums; }
+
+  /* Modal */
+  .modal-overlay {
+    display:none; position:fixed; inset:0; z-index:1000; background:rgba(20,28,46,0.55);
+    align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-overlay.visible { display:flex; }
+  .modal-box {
+    background:var(--card-bg); border-top:3px solid var(--gold); border-radius:6px;
+    max-width:440px; width:100%; max-height:90vh; overflow-y:auto;
+    box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px;
+  }
+  .modal-box h2 { font-family:Georgia,serif; font-size:1.25rem; color:var(--accent); margin-bottom:12px; }
+  .modal-body { font-size:0.9rem; color:var(--text); line-height:1.55; }
+  .modal-body ol { margin:12px 0 0 20px; }
+  .modal-body li { margin-bottom:8px; }
+  .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; flex-wrap:wrap; }
+  .ios-share-illo {
+    display:flex; align-items:center; gap:10px; background:var(--citation-bg,#f0ede4);
+    border:1px solid var(--citation-border,#d8d3c6); border-radius:4px; padding:10px 12px; margin:14px 0;
+    font-size:0.82rem; color:var(--text-secondary);
+  }
+  .ios-share-illo svg { flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -1564,10 +1674,21 @@
       <div class="user-name" id="userName"></div>
       <div class="user-title" id="userTitle"></div>
     </div>
-    <button class="btn-logout" onclick="logout()">Logout</button>
+    <div class="user-actions">
+      <button class="btn-logout" onclick="logout()">Logout</button>
+      <button class="btn-settings" onclick="toggleSettings()">Settings</button>
+    </div>
   </div>
 </header>
 <div class="offline-banner" id="offlineBanner">Offline &middot; observations will be saved and submitted when you reconnect</div>
+
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <h2 id="modalTitle"></h2>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-actions" id="modalActions"></div>
+  </div>
+</div>
 
 <main>
   <div style="margin-bottom: 20px;">
@@ -1743,6 +1864,81 @@
       <div class="admin-msg" id="adminAddMsg"></div>
     </div>
   </div>
+
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-head">
+      <div class="section-label">Settings</div>
+      <button class="btn-settings-close" onclick="toggleSettings(false)">Close</button>
+    </div>
+
+    <div class="admin-section" id="settingsInstallSection" style="display:none;">
+      <h3>Install App</h3>
+      <p class="settings-hint" style="margin-top:0;">Install CARL to your home screen for full-screen access and faster startup in the field.</p>
+      <div class="settings-btn-row">
+        <button class="settings-btn" id="installPwaBtn" onclick="onInstallClick()">Install CARL</button>
+      </div>
+      <div class="settings-msg" id="installMsg"></div>
+    </div>
+
+    <div class="admin-section">
+      <h3>Profile</h3>
+      <div class="settings-field">
+        <label for="profileDisplayName">Display Name</label>
+        <input type="text" id="profileDisplayName" autocomplete="off" maxlength="60" placeholder="Your name">
+      </div>
+      <div class="settings-field">
+        <label for="profileRole">Role / Title</label>
+        <input type="text" id="profileRole" autocomplete="off" maxlength="80" placeholder="e.g. Senior Construction Inspector">
+      </div>
+      <div class="settings-btn-row">
+        <button class="settings-btn" id="saveProfileBtn" onclick="saveProfile()">Save Profile</button>
+      </div>
+      <div class="settings-msg" id="profileMsg"></div>
+    </div>
+
+    <div class="admin-section">
+      <h3>Notifications</h3>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Daily report finished</div>
+          <div class="toggle-sub">Notify me when an evaluation result is ready.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="notifReport" onchange="onNotifToggle('report', this)">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Queued submissions sent</div>
+          <div class="toggle-sub">Notify me when queued observations finally reach CARL.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="notifQueue" onchange="onNotifToggle('queue', this)">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="settings-msg" id="notifMsg"></div>
+    </div>
+
+    <div class="admin-section">
+      <h3>Cache &amp; Storage</h3>
+      <div class="storage-meter">
+        <div class="storage-bar"><span id="storageFill"></span></div>
+        <div class="storage-text" id="storageText">Calculating storage usage...</div>
+      </div>
+      <div class="settings-btn-row" style="margin-top:14px;">
+        <button class="settings-btn settings-btn-outline" onclick="settingsForceSync()">Force Sync</button>
+        <button class="settings-btn settings-btn-outline" onclick="toggleSettingsQueue()">View Queue</button>
+        <button class="settings-btn settings-btn-danger" onclick="confirmClearDrafts()">Clear Local Drafts</button>
+      </div>
+      <div class="panel" id="settingsQueuePanel" style="margin-top:14px;">
+        <div class="section-label">Pending Submissions</div>
+        <div id="settingsQueueList"><div class="panel-empty">Queue is empty.</div></div>
+      </div>
+      <div class="settings-msg" id="storageMsg"></div>
+    </div>
+  </div>
 </main>
 
 <div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
@@ -1808,6 +2004,7 @@ async function login() {
     authUser = data.user;
     document.getElementById('userName').textContent = authUser.display_name || '';
     document.getElementById('userTitle').textContent = authUser.title || '';
+    applyProfileOverride();
     document.getElementById('authScreen').style.display = 'none';
     document.getElementById('appContent').classList.add('visible');
     updateAdminVisibility();
@@ -1839,6 +2036,7 @@ async function logout() {
   var ack = document.getElementById('disclaimerCheck'); if (ack) { ack.checked = false; document.getElementById('authBtn').disabled = true; }
   var adminBtn = document.getElementById('adminBtn'); if (adminBtn) adminBtn.classList.add('admin-hidden');
   var adminPanel = document.getElementById('adminPanel'); if (adminPanel) adminPanel.classList.remove('visible');
+  var settingsPanel = document.getElementById('settingsPanel'); if (settingsPanel) settingsPanel.classList.remove('visible');
 }
 
 function updateAdminVisibility() {
@@ -2474,6 +2672,8 @@ async function submitObservation() {
           settled = true;
           var adapted = adaptLogEntryForRender(fresh[0]);
           renderResults(adapted);
+          // Notify only when the app is backgrounded -- if the user is watching, the on-screen result is enough.
+          if (document.hidden) notifyIfEnabled('report', 'CARL evaluation ready', 'Your observation has been evaluated.');
           try { await CARL.deleteOutbox(item.id); } catch (e) {} // success -> drop from queue (result is on screen + in the daily log)
           finish(); await refreshQueueUI();
           return;
@@ -3681,9 +3881,20 @@ function togglePanel(id, force) {
 /* ---- Reconnect / foreground: recover then flush queue ---- */
 async function onReconnect() {
   if (!_connOnline) return;
+  var pendingBefore = [];
+  try { pendingBefore = (await CARL.listOutbox()).filter(function (i) { return i.status === 'queued'; }).map(function (i) { return i.id; }); } catch (e) {}
   try { await CARL.recoverStuck(); } catch (e) {}
   try { await CARL.flushQueued(); } catch (e) {}
   await refreshQueueUI();
+  if (pendingBefore.length) {
+    try {
+      var after = await CARL.listOutbox();
+      var sent = after.filter(function (i) { return pendingBefore.indexOf(i.id) >= 0 && (i.status === 'done' || i.status === 'sent'); }).length;
+      if (sent > 0) notifyIfEnabled('queue', 'CARL submissions sent', sent + ' queued observation' + (sent === 1 ? '' : 's') + ' reached CARL.');
+    } catch (e) {}
+  }
+  var sqp = document.getElementById('settingsQueuePanel');
+  if (sqp && sqp.classList.contains('visible')) { try { renderSettingsQueue(); } catch (e) {} }
 }
 
 /* ---- Service worker + events + startup ---- */
@@ -3705,6 +3916,239 @@ setInterval(function () { if (document.visibilityState === 'visible') refreshCon
   var b = document.getElementById('buildingNumber'); if (b) b.addEventListener('input', scheduleAutosave);
   var o = document.getElementById('observation'); if (o) o.addEventListener('input', scheduleAutosave);
 })();
+/* ============================================================
+ * Settings page: install, profile, notifications, cache/storage.
+ * ============================================================ */
+var PROFILE_KEY = 'carl-profile-override';
+var NOTIF_PREFS_KEY = 'carl-notif-prefs';
+var _deferredInstallPrompt = null;
+
+/* ---- Install (PWA) ---- */
+window.addEventListener('beforeinstallprompt', function (e) {
+  e.preventDefault();              // suppress the mini-infobar; we drive install from Settings
+  _deferredInstallPrompt = e;
+  updateInstallSectionVisibility();
+});
+window.addEventListener('appinstalled', function () {
+  _deferredInstallPrompt = null;
+  updateInstallSectionVisibility();
+});
+function isStandalone() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+}
+function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent || ''); }
+function updateInstallSectionVisibility() {
+  var sec = document.getElementById('settingsInstallSection'); if (!sec) return;
+  if (isStandalone()) { sec.style.display = 'none'; return; }  // already installed -> nothing to offer
+  sec.style.display = '';
+  var btn = document.getElementById('installPwaBtn');
+  if (btn) btn.textContent = (!_deferredInstallPrompt && isIOS()) ? 'How to Install' : 'Install CARL';
+}
+async function onInstallClick() {
+  if (_deferredInstallPrompt) {
+    var p = _deferredInstallPrompt; _deferredInstallPrompt = null;   // a prompt() can only be used once
+    p.prompt();
+    try {
+      var choice = await p.userChoice;
+      var ok = choice && choice.outcome === 'accepted';
+      showInstallMsg(ok ? 'Installing CARL...' : 'Install dismissed. You can install any time from here.', ok);
+    } catch (e) {}
+    updateInstallSectionVisibility();
+  } else if (isIOS()) {
+    showIosInstallModal();
+  } else {
+    showInstallMsg('Open your browser menu and choose "Install app" or "Add to Home Screen".', true);
+  }
+}
+function showInstallMsg(text, ok) {
+  var el = document.getElementById('installMsg'); if (!el) return;
+  el.textContent = text; el.className = 'settings-msg visible ' + (ok ? 'settings-msg-ok' : 'settings-msg-err');
+}
+function showIosInstallModal() {
+  var svg = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1c2b4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 11v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8"/></svg>';
+  var body = '<p>To install CARL on your iPhone or iPad, use Safari:</p>'
+    + '<div class="ios-share-illo">' + svg + '<span>Tap the <strong>Share</strong> icon in Safari\'s toolbar (the square with an up arrow).</span></div>'
+    + '<ol>'
+    + '<li>Tap the <strong>Share</strong> button.</li>'
+    + '<li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>'
+    + '<li>Tap <strong>Add</strong> in the top-right corner.</li>'
+    + '</ol>';
+  showModal('Add CARL to Home Screen', body, [{ label: 'Got it', onClick: closeModal }]);
+}
+
+/* ---- Profile (override is per-username; no self-service auth endpoint yet) ---- */
+function readProfileOverride() { try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null'); } catch (e) { return null; } }
+function profileOverrideForCurrentUser() {
+  var ov = readProfileOverride();
+  if (ov && authUser && ov.username === authUser.username) return ov;
+  return null;
+}
+function applyProfileOverride() {
+  var ov = profileOverrideForCurrentUser(); if (!ov) return;
+  if (ov.display_name) { var n = document.getElementById('userName'); if (n) n.textContent = ov.display_name; if (authUser) authUser.display_name = ov.display_name; }
+  if (typeof ov.title === 'string') { var t = document.getElementById('userTitle'); if (t) t.textContent = ov.title; if (authUser) authUser.title = ov.title; }
+}
+function loadProfileFields() {
+  var ov = profileOverrideForCurrentUser();
+  var name = (ov && ov.display_name) || (authUser && authUser.display_name) || '';
+  var role = (ov && typeof ov.title === 'string') ? ov.title : ((authUser && authUser.title) || '');
+  var dn = document.getElementById('profileDisplayName'); if (dn) dn.value = name;
+  var rl = document.getElementById('profileRole'); if (rl) rl.value = role;
+}
+async function saveProfile() {
+  var name = document.getElementById('profileDisplayName').value.trim();
+  var role = document.getElementById('profileRole').value.trim();
+  if (!name) { showSettingsMsg('profileMsg', 'Display name cannot be empty.', false); return; }
+  // Persist locally so the header and this session reflect the change immediately.
+  localStorage.setItem(PROFILE_KEY, JSON.stringify({
+    username: (authUser && authUser.username) || null,
+    display_name: name,
+    title: role
+  }));
+  applyProfileOverride();
+  // TODO(backend): there is no self-service profile endpoint on auth.carlcompliance.com yet.
+  //   Probed 2026-06-02 -- POST /profile, /me, /account, /update-profile all return 404; only the
+  //   shepherd-only /admin/change-display-name and /admin/change-title endpoints exist. When a
+  //   self-service endpoint ships, POST { display_name, title } here with authHeaders() and
+  //   reconcile this local override with the server response.
+  showSettingsMsg('profileMsg', 'Saved on this device. Server sync will be enabled when the profile endpoint is available.', true);
+}
+
+/* ---- Notification preferences (stored locally; permission requested on enable) ---- */
+function readNotifPrefs() { try { return JSON.parse(localStorage.getItem(NOTIF_PREFS_KEY) || '{}') || {}; } catch (e) { return {}; } }
+function writeNotifPrefs(p) { localStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(p)); }
+function loadNotifToggles() {
+  var p = readNotifPrefs();
+  var r = document.getElementById('notifReport'); if (r) r.checked = !!p.report;
+  var q = document.getElementById('notifQueue'); if (q) q.checked = !!p.queue;
+}
+async function onNotifToggle(key, el) {
+  if (el.checked) {
+    if (!('Notification' in window)) { el.checked = false; showSettingsMsg('notifMsg', 'This browser does not support notifications.', false); return; }
+    var perm = Notification.permission;
+    if (perm === 'default') { try { perm = await Notification.requestPermission(); } catch (e) { perm = Notification.permission; } }
+    if (perm !== 'granted') {
+      el.checked = false;
+      showSettingsMsg('notifMsg', perm === 'denied'
+        ? 'Notifications are blocked. Enable them for this site in your browser settings.'
+        : 'Notification permission was not granted.', false);
+      return;
+    }
+  }
+  var p = readNotifPrefs(); p[key] = el.checked; writeNotifPrefs(p);
+  showSettingsMsg('notifMsg', el.checked ? 'Notifications enabled.' : 'Notification turned off.', true);
+}
+function notifyIfEnabled(key, title, body) {
+  try {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    var p = readNotifPrefs(); if (!p[key]) return;
+    new Notification(title, { body: body, icon: '/icons/icon-192.png', tag: 'carl-' + key });
+  } catch (e) {}
+}
+
+/* ---- Cache & storage ---- */
+function formatBytes(n) {
+  if (!n || n < 0) return '0 B';
+  var units = ['B', 'KB', 'MB', 'GB']; var i = 0; var v = n;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return (v >= 10 || i === 0 ? Math.round(v) : v.toFixed(1)) + ' ' + units[i];
+}
+async function updateStorageEstimate() {
+  var text = document.getElementById('storageText');
+  var fill = document.getElementById('storageFill');
+  if (!navigator.storage || !navigator.storage.estimate) { if (text) text.textContent = 'Storage usage is unavailable on this device.'; return; }
+  try {
+    var est = await navigator.storage.estimate();
+    var used = est.usage || 0, quota = est.quota || 0;
+    var pct = quota ? Math.min(100, used / quota * 100) : 0;
+    if (fill) fill.style.width = pct.toFixed(1) + '%';
+    if (text) text.textContent = formatBytes(used) + ' used' + (quota ? ' of ' + formatBytes(quota) + ' (' + pct.toFixed(1) + '%)' : '');
+  } catch (e) { if (text) text.textContent = 'Could not read storage usage.'; }
+}
+function confirmClearDrafts() {
+  showModal('Clear local drafts?',
+    'This permanently deletes every saved draft on this device, including the autosaved working draft. Queued submissions are not affected.',
+    [
+      { label: 'Cancel', outline: true, onClick: closeModal },
+      { label: 'Delete Drafts', danger: true, onClick: doClearDrafts }
+    ]);
+}
+async function doClearDrafts() {
+  closeModal();
+  try {
+    var drafts = await CARL.listDrafts();
+    await Promise.all(drafts.map(function (d) { return CARL.deleteDraft(d.id); }));
+    await refreshDraftsUI();
+    showSettingsMsg('storageMsg', 'Cleared ' + drafts.length + ' draft' + (drafts.length === 1 ? '' : 's') + '.', true);
+  } catch (e) {
+    showSettingsMsg('storageMsg', 'Could not clear drafts: ' + e.message, false);
+  }
+  updateStorageEstimate();
+}
+function toggleSettingsQueue() {
+  var p = document.getElementById('settingsQueuePanel'); if (!p) return;
+  var show = !p.classList.contains('visible');
+  p.classList.toggle('visible', show);
+  if (show) renderSettingsQueue();
+}
+async function renderSettingsQueue() {
+  var list = document.getElementById('settingsQueueList'); if (!list) return;
+  var rows = await CARL.listOutbox();
+  if (!rows.length) { list.innerHTML = '<div class="panel-empty">Queue is empty.</div>'; return; }
+  list.innerHTML = rows.slice().reverse().map(function (i) {
+    var when = new Date(i.createdAt).toLocaleString();
+    var title = escapeHtml((i.payload.building_number || '?') + ' - ' + (i.payload.observation || '').slice(0, 60));
+    return '<div class="panel-row"><div class="pr-main"><div class="pr-title">' + title + '</div><div class="pr-sub">' + when + '</div></div><div class="pr-actions"><span class="q-status ' + i.status + '">' + i.status + '</span></div></div>';
+  }).join('');
+}
+async function settingsForceSync() {
+  if (!(await probeConnectivity(4000))) { setConnState(false); showSettingsMsg('storageMsg', 'Still offline. Sync will run automatically when you reconnect.', false); return; }
+  setConnState(true);
+  showSettingsMsg('storageMsg', 'Syncing queued submissions...', true);
+  await onReconnect();
+  if (document.getElementById('settingsQueuePanel').classList.contains('visible')) renderSettingsQueue();
+  await updateStorageEstimate();
+  showSettingsMsg('storageMsg', 'Sync complete.', true);
+}
+
+/* ---- Settings panel + modal plumbing ---- */
+function showSettingsMsg(elId, text, ok) {
+  var el = document.getElementById(elId); if (!el) return;
+  el.textContent = text; el.className = 'settings-msg visible ' + (ok ? 'settings-msg-ok' : 'settings-msg-err');
+  if (ok) setTimeout(function () { el.classList.remove('visible'); }, 4000);
+}
+function showModal(title, bodyHtml, actions) {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').innerHTML = bodyHtml;
+  var actEl = document.getElementById('modalActions'); actEl.innerHTML = '';
+  (actions || []).forEach(function (a) {
+    var b = document.createElement('button');
+    b.className = 'settings-btn' + (a.danger ? ' settings-btn-danger' : (a.outline ? ' settings-btn-outline' : ''));
+    b.textContent = a.label;
+    b.onclick = a.onClick;
+    actEl.appendChild(b);
+  });
+  document.getElementById('modalOverlay').classList.add('visible');
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('visible'); }
+function toggleSettings(force) {
+  var panel = document.getElementById('settingsPanel'); if (!panel) return;
+  var show = (typeof force === 'boolean') ? force : !panel.classList.contains('visible');
+  if (show) {
+    var dl = document.getElementById('dailyLog'); if (dl) dl.classList.remove('visible');
+    var ap = document.getElementById('adminPanel'); if (ap) ap.classList.remove('visible');
+    updateInstallSectionVisibility();
+    loadProfileFields();
+    loadNotifToggles();
+    updateStorageEstimate();
+    var iMsg = document.getElementById('installMsg'); if (iMsg) iMsg.classList.remove('visible');
+    panel.classList.add('visible');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    panel.classList.remove('visible');
+  }
+}
+
 (async function initPWA() {
   await refreshConnState();
   try { await refreshQueueUI(); } catch (e) {}
