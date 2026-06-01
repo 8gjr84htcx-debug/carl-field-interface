@@ -4,8 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="CARL">
+<meta name="theme-color" content="#1c2b4a">
 <title>CARL - Field Inspection</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1433,6 +1440,44 @@
       align-items: center;
     }
   }
+  /* ---- PWA additions ---- */
+  .status-dot.offline { background:#f44336; box-shadow:0 0 4px rgba(244,67,54,0.5); }
+  .queue-badge { display:none; min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:var(--gold); color:#fff; font-size:0.6rem; font-weight:700; line-height:16px; text-align:center; margin-left:4px; }
+  .queue-badge.visible { display:inline-block; }
+  .offline-banner { display:none; background:#8b5e14; color:#fff; text-align:center; padding:6px 12px; font-size:0.8rem; font-weight:600; letter-spacing:0.03em; }
+  .offline-banner.visible { display:block; }
+  .progress-card { display:none; margin-top:16px; background:var(--card-bg); border:1px solid var(--border); border-left:3px solid var(--gold); border-radius:4px; padding:18px 20px; }
+  .progress-card.visible { display:block; }
+  .progress-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px; }
+  .progress-head .ptitle { font-family:Georgia,serif; font-size:1.05rem; color:var(--accent); }
+  .progress-head .pelapsed { font-variant-numeric:tabular-nums; font-size:0.85rem; color:var(--text-secondary); }
+  .progress-note { font-size:0.72rem; color:var(--label); margin-bottom:14px; }
+  .pstage { display:flex; align-items:center; gap:10px; padding:5px 0; font-size:0.9rem; color:var(--text-secondary); }
+  .pstage .pmark { width:16px; height:16px; border-radius:50%; border:2px solid var(--border); flex-shrink:0; }
+  .pstage.active { color:var(--text); font-weight:600; }
+  .pstage.active .pmark { border-color:var(--gold); border-top-color:transparent; animation:pspin 0.9s linear infinite; }
+  .pstage.done .pmark { background:var(--confirmed,#1b6e2a); border-color:var(--confirmed,#1b6e2a); }
+  @keyframes pspin { to { transform:rotate(360deg); } }
+  .field-tools { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  .btn-tool { flex:1; min-width:120px; padding:10px 12px; font-size:0.8rem; font-weight:700; letter-spacing:0.06em; border:1px solid var(--border); background:var(--bg-elevated,#fff); color:var(--accent); border-radius:4px; cursor:pointer; }
+  .btn-tool:active { background:var(--citation-bg,#f0ede4); }
+  .panel { display:none; margin-top:14px; background:var(--card-bg); border:1px solid var(--border); border-radius:4px; padding:14px 16px; }
+  .panel.visible { display:block; }
+  .panel-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #e8e5de; font-size:0.85rem; }
+  .panel-row:last-child { border-bottom:none; }
+  .panel-row .pr-main { flex:1; min-width:0; }
+  .panel-row .pr-main .pr-title { font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .panel-row .pr-main .pr-sub { font-size:0.72rem; color:var(--label); }
+  .panel-row .pr-actions { display:flex; gap:6px; flex-shrink:0; }
+  .pr-btn { padding:5px 10px; font-size:0.72rem; font-weight:700; border:1px solid var(--border); background:var(--bg-elevated,#fff); border-radius:3px; cursor:pointer; color:var(--accent); }
+  .pr-btn.danger { color:#a02020; }
+  .q-status { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; padding:2px 7px; border-radius:3px; }
+  .q-status.queued { background:#e8e5de; color:#6b6355; }
+  .q-status.sending { background:#cfe0f0; color:#1c2b4a; }
+  .q-status.sent { background:#f0e2c4; color:#8b5e14; }
+  .q-status.done { background:#d6ecd9; color:#1b6e2a; }
+  .q-status.error { background:#f3d6d6; color:#a02020; }
+  .panel-empty { font-size:0.82rem; color:var(--label); padding:8px 0; }
 </style>
 </head>
 <body>
@@ -1492,6 +1537,12 @@
   <h1>CARL</h1>
   <span>Compliance Assistance and Regulatory Liaison</span>
   <div class="status-bar">
+    <div class="status-dot-wrap" id="statusConn">
+      <div class="status-dot" id="dotConn"></div>
+      <span class="status-label">Connection</span>
+      <span class="queue-badge" id="queueBadge">0</span>
+      <span class="status-tooltip" id="tipConn">Checking connection</span>
+    </div>
     <div class="status-dot-wrap" id="statusDocLib">
       <div class="status-dot" id="dotDocLib"></div>
       <span class="status-label">Doc Library</span>
@@ -1516,6 +1567,7 @@
     <button class="btn-logout" onclick="logout()">Logout</button>
   </div>
 </header>
+<div class="offline-banner" id="offlineBanner">Offline &middot; observations will be saved and submitted when you reconnect</div>
 
 <main>
   <div style="margin-bottom: 20px;">
@@ -1533,13 +1585,31 @@
       <button class="btn-clear" onclick="clearAll()">CLEAR</button>
       <button class="btn-mic" id="micBtn" onclick="toggleMic()" title="Voice input">&#x1F3A4;</button>
       <button class="btn-photo" id="photoBtn" onclick="document.getElementById('photoInput').click()" title="Attach photo">&#x1F4F7;</button>
-      <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handlePhoto(this)">
+      <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)">
     </div>
+    <div class="field-tools">
+      <button class="btn-tool" onclick="saveDraftUI()">SAVE DRAFT</button>
+      <button class="btn-tool" onclick="togglePanel('draftsPanel')">DRAFTS <span id="draftsCount">(0)</span></button>
+      <button class="btn-tool" onclick="togglePanel('queuePanel')">QUEUE <span id="queueCount">(0)</span></button>
+    </div>
+    <div class="panel" id="draftsPanel"><div class="section-label">Saved Drafts</div><div id="draftsList"><div class="panel-empty">No saved drafts.</div></div></div>
+    <div class="panel" id="queuePanel"><div class="section-label">Submission Queue</div><div id="queueList"><div class="panel-empty">Queue is empty.</div></div></div>
   </div>
 
   <div class="loading" id="loading">
     <div class="spinner"></div>
     <span>Searching compliance library... Evaluating regulatory requirements... Verifying citations... Consulting reference standards...</span>
+  </div>
+  <div class="progress-card" id="progressCard">
+    <div class="progress-head">
+      <span class="ptitle">Evaluating observation</span>
+      <span class="pelapsed" id="pElapsed">0:00</span>
+    </div>
+    <div class="progress-note">Stages are estimated, not live status. Keep this screen open; you can lock the phone, but leaving the app may interrupt the request (it will be recovered on return).</div>
+    <div class="pstage" id="pstage-0"><span class="pmark"></span><span>Classifying discipline</span></div>
+    <div class="pstage" id="pstage-1"><span class="pmark"></span><span>Querying the document library (NotebookLM)</span></div>
+    <div class="pstage" id="pstage-2"><span class="pmark"></span><span>Evaluating against regulatory citations</span></div>
+    <div class="pstage" id="pstage-3"><span class="pmark"></span><span>Cross-checking and finalizing</span></div>
   </div>
 
   <div class="error-msg" id="errorMsg"></div>
@@ -1689,6 +1759,7 @@
 
 </div>
 
+<script src="/carl-db.js"></script>
 <script>
 var DAILY_REPORT_URL = 'https://n8n.carlcompliance.com/webhook/carl-daily-report';
 var ASK_RESULT_URL = 'https://n8n.carlcompliance.com/webhook/carl-ask-result';
@@ -2294,6 +2365,20 @@ async function submitObservation() {
   var text = textarea.value.trim();
   if (!text) { textarea.focus(); return; }
 
+  // Offline: persist to the durable queue and send automatically on reconnect.
+  if (!navigator.onLine) {
+    var offPayload = { observation: text, building_number: buildingNumber };
+    if (attachedPhotoBase64) { offPayload.image = attachedPhotoBase64; offPayload.image_thumbnail = attachedThumbBase64; }
+    if (authUser) { offPayload.inspector_username = authUser.username; offPayload.inspector_display_name = authUser.display_name; }
+    await CARL.enqueue(offPayload);
+    await refreshQueueUI();
+    clearComposeAfterQueue();
+    var emOff = document.getElementById('errorMsg');
+    emOff.textContent = 'No connection. Saved to the submission queue and will send automatically when you are back online.';
+    emOff.classList.add('visible');
+    return;
+  }
+
   setAskMode(false);
 
   var btn = document.getElementById('submitBtn');
@@ -2306,6 +2391,7 @@ async function submitObservation() {
   btn.disabled = true;
   if (loadingText) loadingText.textContent = 'CARL is processing your observation...';
   loading.classList.add('visible');
+  startProgress(); acquireWakeLock();
   errorMsg.classList.remove('visible');
   results.classList.remove('visible');
 
@@ -2319,6 +2405,8 @@ async function submitObservation() {
     stopPolling();
     btn.disabled = false;
     loading.classList.remove('visible');
+    stopProgress();
+    releaseWakeLock();
     if (loadingText) loadingText.textContent = originalLoadingText;
   };
 
@@ -2384,6 +2472,8 @@ async function submitObservation() {
       stopPolling();
       btn.disabled = false;
       loading.classList.remove('visible');
+      stopProgress();
+      releaseWakeLock();
       if (loadingText) loadingText.textContent = originalLoadingText;
       errorMsg.textContent = 'Timed out waiting for evaluation result (3 minutes). The observation may still be processing -- check the daily log shortly.';
       errorMsg.classList.add('visible');
@@ -3396,6 +3486,188 @@ async function exportShiftReport() {
     alert('Failed to generate shift report: ' + err.message);
   }
 }
+
+/* ============================================================
+ * PWA: install, offline drafts, submission queue, connection
+ * indicator, wake lock, staged progress, recovery.
+ * Additive layer; the existing online submit/poll flow is untouched.
+ * ============================================================ */
+
+/* ---- Screen Wake Lock during the long submit ---- */
+var _wakeLock = null;
+async function acquireWakeLock() { try { if ('wakeLock' in navigator) { _wakeLock = await navigator.wakeLock.request('screen'); } } catch (e) {} }
+function releaseWakeLock() { try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch (e) {} }
+
+/* ---- Staged progress (estimated; backend emits no live status). Hides the legacy spinner. ---- */
+var _progressActive = false, _progTimer = null, _progStart = 0;
+var _stageAtSec = [0, 5, 105, 140];
+function startProgress() {
+  var card = document.getElementById('progressCard');
+  var loading = document.getElementById('loading');
+  if (loading) loading.classList.remove('visible'); // prefer the richer card
+  if (!card) return;
+  card.classList.add('visible');
+  for (var i = 0; i < 4; i++) { var el = document.getElementById('pstage-' + i); if (el) el.classList.remove('active', 'done'); }
+  _progressActive = true; _progStart = Date.now();
+  tickProgress();
+  _progTimer = setInterval(tickProgress, 1000);
+}
+function tickProgress() {
+  var sec = Math.floor((Date.now() - _progStart) / 1000);
+  var m = Math.floor(sec / 60), s = sec % 60;
+  var pe = document.getElementById('pElapsed'); if (pe) pe.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  var active = 0;
+  for (var i = 0; i < _stageAtSec.length; i++) { if (sec >= _stageAtSec[i]) active = i; }
+  for (var j = 0; j < 4; j++) { var el = document.getElementById('pstage-' + j); if (!el) continue; el.classList.toggle('done', j < active); el.classList.toggle('active', j === active); }
+}
+function stopProgress() {
+  _progressActive = false;
+  if (_progTimer) { clearInterval(_progTimer); _progTimer = null; }
+  var card = document.getElementById('progressCard');
+  if (!card) return;
+  for (var i = 0; i < 4; i++) { var el = document.getElementById('pstage-' + i); if (el) { el.classList.remove('active'); el.classList.add('done'); } }
+  setTimeout(function () { card.classList.remove('visible'); }, 400);
+}
+
+/* ---- Connection indicator ---- */
+function updateConnUI() {
+  var online = navigator.onLine;
+  var dot = document.getElementById('dotConn');
+  var tip = document.getElementById('tipConn');
+  var banner = document.getElementById('offlineBanner');
+  if (dot) { dot.classList.toggle('green', online); dot.classList.toggle('offline', !online); }
+  if (tip) tip.textContent = online ? 'Online' : 'Offline - submissions will queue';
+  if (banner) banner.classList.toggle('visible', !online);
+}
+
+/* ---- Submission queue UI ---- */
+async function refreshQueueUI() {
+  var rows = await CARL.listOutbox();
+  var pending = rows.filter(function (i) { return i.status === 'queued' || i.status === 'sending' || i.status === 'sent'; });
+  var badge = document.getElementById('queueBadge');
+  if (badge) { badge.textContent = pending.length; badge.classList.toggle('visible', pending.length > 0); }
+  var qc = document.getElementById('queueCount'); if (qc) qc.textContent = '(' + pending.length + ')';
+  var list = document.getElementById('queueList'); if (!list) return;
+  if (!rows.length) { list.innerHTML = '<div class="panel-empty">Queue is empty.</div>'; return; }
+  list.innerHTML = rows.slice().reverse().map(function (i) {
+    var when = new Date(i.createdAt).toLocaleString();
+    var title = escapeHtml((i.payload.building_number || '?') + ' - ' + (i.payload.observation || '').slice(0, 60));
+    var actions = '';
+    if (i.status === 'done') actions = '<button class="pr-btn" onclick="viewQueued(\'' + i.id + '\')">VIEW</button><button class="pr-btn danger" onclick="removeQueued(\'' + i.id + '\')">DELETE</button>';
+    else if (i.status === 'sent' || i.status === 'error') actions = '<button class="pr-btn" onclick="recoverNow()">RECOVER</button><button class="pr-btn" onclick="retryQueued(\'' + i.id + '\')">RETRY</button>';
+    else if (i.status === 'queued') actions = '<button class="pr-btn" onclick="retryQueued(\'' + i.id + '\')">SEND</button><button class="pr-btn danger" onclick="removeQueued(\'' + i.id + '\')">DELETE</button>';
+    return '<div class="panel-row"><div class="pr-main"><div class="pr-title">' + title + '</div><div class="pr-sub">' + when + '</div></div><div class="pr-actions"><span class="q-status ' + i.status + '">' + i.status + '</span>' + actions + '</div></div>';
+  }).join('');
+}
+async function viewQueued(id) { var rows = await CARL.listOutbox(); var it = rows.find(function (x) { return x.id === id; }); if (it && it.result) { renderResults(it.result); document.getElementById('results').scrollIntoView({ behavior: 'smooth' }); } }
+async function removeQueued(id) { await CARL.deleteOutbox(id); await refreshQueueUI(); }
+async function retryQueued(id) {
+  if (!navigator.onLine) { alert('Still offline. It will retry automatically when you reconnect.'); return; }
+  var rows = await CARL.listOutbox(); var it = rows.find(function (x) { return x.id === id; }); if (!it) return;
+  it.status = 'queued'; await CARL.updateOutbox(it);
+  startProgress(); acquireWakeLock();
+  var res = await CARL.sendItem(it);
+  stopProgress(); releaseWakeLock();
+  if (res.ok) { renderResults(res.result); document.getElementById('results').scrollIntoView({ behavior: 'smooth' }); }
+  await refreshQueueUI();
+}
+async function recoverNow() {
+  var rec = await CARL.recoverStuck({ graceMs: 0 });
+  await refreshQueueUI();
+  if (rec.length) { renderResults(rec[0].result); document.getElementById('results').scrollIntoView({ behavior: 'smooth' }); }
+  else { alert('No matching result found in the daily report yet. It may still be processing - try again shortly.'); }
+}
+
+/* ---- Drafts UI + autosave ---- */
+var AUTOSAVE_ID = 'autosave-working';
+var _autosaveTimer = null;
+function scheduleAutosave() {
+  clearTimeout(_autosaveTimer);
+  _autosaveTimer = setTimeout(function () {
+    var bld = document.getElementById('buildingNumber').value.trim();
+    var obs = document.getElementById('observation').value.trim();
+    if (!bld && !obs) { CARL.deleteDraft(AUTOSAVE_ID).then(refreshDraftsUI); return; }
+    CARL.saveDraft({ id: AUTOSAVE_ID, buildingNumber: bld, observation: obs, photoBase64: attachedPhotoBase64, thumbBase64: attachedThumbBase64 }).then(refreshDraftsUI);
+  }, 1200);
+}
+function cancelAutosaveDraft() { clearTimeout(_autosaveTimer); CARL.deleteDraft(AUTOSAVE_ID).then(refreshDraftsUI); }
+function clearComposeAfterQueue() { document.getElementById('observation').value = ''; removePhoto(); cancelAutosaveDraft(); }
+async function saveDraftUI() {
+  var bld = document.getElementById('buildingNumber').value.trim();
+  var obs = document.getElementById('observation').value.trim();
+  if (!bld && !obs) { alert('Nothing to save yet.'); return; }
+  await CARL.saveDraft({ buildingNumber: bld, observation: obs, photoBase64: attachedPhotoBase64, thumbBase64: attachedThumbBase64 });
+  await refreshDraftsUI(); togglePanel('draftsPanel', true);
+}
+async function refreshDraftsUI() {
+  var drafts = await CARL.listDrafts();
+  var dc = document.getElementById('draftsCount'); if (dc) dc.textContent = '(' + drafts.length + ')';
+  var list = document.getElementById('draftsList'); if (!list) return;
+  if (!drafts.length) { list.innerHTML = '<div class="panel-empty">No saved drafts.</div>'; return; }
+  list.innerHTML = drafts.map(function (d) {
+    var isAuto = d.id === AUTOSAVE_ID;
+    var name = isAuto ? 'Working draft (autosaved)' : ((d.buildingNumber || '(no building)') + ' - ' + (d.observation || '').slice(0, 50));
+    var when = new Date(d.updatedAt).toLocaleString();
+    return '<div class="panel-row"><div class="pr-main"><div class="pr-title">' + escapeHtml(name) + '</div><div class="pr-sub">' + when + (d.photoBase64 ? ' &middot; photo' : '') + '</div></div><div class="pr-actions"><button class="pr-btn" onclick="loadDraft(\'' + d.id + '\')">LOAD</button><button class="pr-btn danger" onclick="deleteDraftUI(\'' + d.id + '\')">DELETE</button></div></div>';
+  }).join('');
+}
+async function loadDraft(id) {
+  var d = await CARL.getDraft(id); if (!d) return;
+  document.getElementById('buildingNumber').value = d.buildingNumber || '';
+  document.getElementById('observation').value = d.observation || '';
+  if (d.photoBase64) { attachedPhotoBase64 = d.photoBase64; attachedThumbBase64 = d.thumbBase64 || null; document.getElementById('photoThumb').src = 'data:image/jpeg;base64,' + (d.thumbBase64 || d.photoBase64); document.getElementById('photoPreview').classList.add('visible'); }
+  else { removePhoto(); }
+  togglePanel('draftsPanel', false);
+  document.getElementById('observation').focus();
+}
+async function deleteDraftUI(id) { await CARL.deleteDraft(id); await refreshDraftsUI(); }
+function togglePanel(id, force) {
+  var el = document.getElementById(id); if (!el) return;
+  var show = (typeof force === 'boolean') ? force : !el.classList.contains('visible');
+  el.classList.toggle('visible', show);
+  if (show) { if (id === 'draftsPanel') refreshDraftsUI(); if (id === 'queuePanel') refreshQueueUI(); }
+}
+
+/* ---- Reconnect / foreground: recover then flush queue ---- */
+async function onReconnect() {
+  if (!navigator.onLine) return;
+  try { await CARL.recoverStuck(); } catch (e) {}
+  try { await CARL.flushQueued(); } catch (e) {}
+  await refreshQueueUI();
+}
+
+/* ---- Service worker + events + startup ---- */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function (e) { console.warn('SW registration failed', e); }); });
+}
+window.addEventListener('online', function () { updateConnUI(); onReconnect(); });
+window.addEventListener('offline', updateConnUI);
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') {
+    if (_progressActive && !_wakeLock) acquireWakeLock();
+    updateConnUI(); onReconnect();
+  }
+});
+(function () {
+  var b = document.getElementById('buildingNumber'); if (b) b.addEventListener('input', scheduleAutosave);
+  var o = document.getElementById('observation'); if (o) o.addEventListener('input', scheduleAutosave);
+})();
+(async function initPWA() {
+  updateConnUI();
+  try { await refreshQueueUI(); } catch (e) {}
+  try { await refreshDraftsUI(); } catch (e) {}
+  if (window.CARL) CARL.registerSync();
+  try {
+    var aw = await CARL.getDraft(AUTOSAVE_ID);
+    var emptyForm = !document.getElementById('observation').value.trim() && !document.getElementById('buildingNumber').value.trim();
+    if (aw && emptyForm) {
+      if (aw.buildingNumber) document.getElementById('buildingNumber').value = aw.buildingNumber;
+      if (aw.observation) document.getElementById('observation').value = aw.observation;
+      if (aw.photoBase64) { attachedPhotoBase64 = aw.photoBase64; attachedThumbBase64 = aw.thumbBase64 || null; document.getElementById('photoThumb').src = 'data:image/jpeg;base64,' + (aw.thumbBase64 || aw.photoBase64); document.getElementById('photoPreview').classList.add('visible'); }
+    }
+  } catch (e) {}
+  if (navigator.onLine) onReconnect();
+})();
 </script>
 
 </body>
