@@ -1480,32 +1480,52 @@
   .panel-empty { font-size:0.82rem; color:var(--label); padding:8px 0; }
 
   /* ---- Settings ---- */
-  .user-actions { display:flex; flex-direction:column; gap:6px; align-items:stretch; }
-  .btn-settings {
-    background: transparent;
-    color: #c9a84c;
-    border: 1px solid #c9a84c;
-    border-radius: 3px;
-    padding: 6px 14px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+  /* More (3-dot) menu */
+  .more-wrap { position:relative; display:inline-block; }
+  .btn-more {
+    background:transparent; color:#c9a84c; border:1px solid #c9a84c; border-radius:3px;
+    width:34px; height:30px; display:inline-flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:background 0.15s, color 0.15s; padding:0;
   }
-  .btn-settings:hover { background: #c9a84c; color: #1c2b4a; }
+  .btn-more:hover, .btn-more.open { background:#c9a84c; color:#1c2b4a; }
+  .more-menu {
+    display:none; position:absolute; top:calc(100% + 6px); right:0; z-index:200;
+    min-width:160px; background:#1c2b4a; border:1px solid var(--gold); border-radius:4px;
+    box-shadow:0 6px 20px rgba(0,0,0,0.35); padding:5px; overflow:hidden;
+  }
+  .more-menu.open { display:block; }
+  .more-item {
+    display:block; width:100%; text-align:left; background:transparent; border:none;
+    color:#f5f0e8; font-family:inherit; font-size:0.82rem; font-weight:600; letter-spacing:0.04em;
+    padding:9px 12px; border-radius:3px; cursor:pointer;
+  }
+  .more-item:hover { background:#26365a; color:#c9a84c; }
 
-  .settings-panel { display:none; margin-top:20px; }
-  .settings-panel.visible { display:block; }
-  .settings-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-  .settings-head .section-label { margin:0; }
-  .btn-settings-close {
-    background:transparent; border:1px solid var(--border); color:var(--text-secondary);
-    border-radius:3px; padding:5px 12px; font-size:0.72rem; font-weight:600; letter-spacing:0.06em;
-    text-transform:uppercase; cursor:pointer;
+  /* Settings modal overlay */
+  .settings-overlay {
+    display:none; position:fixed; inset:0; z-index:1000; background:rgba(20,28,46,0.6);
+    align-items:flex-start; justify-content:center; padding:24px 16px; overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
   }
-  .btn-settings-close:hover { background:#f3f3ee; }
+  .settings-overlay.visible { display:flex; }
+  .settings-modal {
+    background:var(--bg); border-top:3px solid var(--gold); border-radius:8px;
+    width:100%; max-width:640px; margin:auto; box-shadow:0 10px 40px rgba(0,0,0,0.35);
+    display:flex; flex-direction:column; max-height:calc(100vh - 48px);
+  }
+  .settings-modal-head {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 20px; border-bottom:1px solid var(--border); background:var(--card-bg);
+    border-radius:8px 8px 0 0; position:sticky; top:0; z-index:1;
+  }
+  .settings-modal-head h2 { font-family:Georgia,serif; font-size:1.3rem; color:var(--accent); }
+  .settings-modal-close {
+    background:transparent; border:none; color:var(--text-secondary); font-size:1.8rem;
+    line-height:1; cursor:pointer; padding:0 4px; border-radius:4px;
+  }
+  .settings-modal-close:hover { color:var(--accent); }
+  .settings-modal-body { padding:18px 20px 22px; overflow-y:auto; }
+  body.modal-open { overflow:hidden; }
 
   .settings-field { margin-bottom:14px; }
   .settings-field:last-child { margin-bottom:0; }
@@ -1568,7 +1588,7 @@
 
   /* Modal */
   .modal-overlay {
-    display:none; position:fixed; inset:0; z-index:1000; background:rgba(20,28,46,0.55);
+    display:none; position:fixed; inset:0; z-index:1100; background:rgba(20,28,46,0.55);
     align-items:center; justify-content:center; padding:20px;
   }
   .modal-overlay.visible { display:flex; }
@@ -1674,9 +1694,15 @@
       <div class="user-name" id="userName"></div>
       <div class="user-title" id="userTitle"></div>
     </div>
-    <div class="user-actions">
-      <button class="btn-logout" onclick="logout()">Logout</button>
-      <button class="btn-settings" onclick="toggleSettings()">Settings</button>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+    <div class="more-wrap">
+      <button class="btn-more" id="moreBtn" onclick="toggleMoreMenu(event)" aria-label="More options" aria-haspopup="true" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg>
+      </button>
+      <div class="more-menu" id="moreMenu" role="menu">
+        <button class="more-item" role="menuitem" onclick="openSettings()">Settings</button>
+        <button class="more-item admin-hidden" id="moreAdminItem" role="menuitem" onclick="openAdminFromMenu()">Admin</button>
+      </div>
     </div>
   </div>
 </header>
@@ -1808,7 +1834,6 @@
   <div style="display:flex;gap:10px;flex-wrap:wrap;">
     <button class="btn-dailylog" style="flex:1;min-width:140px;" onclick="loadDailyLog()">DAILY LOG</button>
     <button class="btn-export" style="flex:1;min-width:180px;" onclick="exportShiftReport()">EXPORT SHIFT REPORT</button>
-    <button class="btn-admin admin-hidden" id="adminBtn" style="flex:1;min-width:110px;" onclick="toggleAdmin()">ADMIN</button>
   </div>
 
   <div class="daily-log" id="dailyLog">
@@ -1865,11 +1890,13 @@
     </div>
   </div>
 
-  <div class="settings-panel" id="settingsPanel">
-    <div class="settings-head">
-      <div class="section-label">Settings</div>
-      <button class="btn-settings-close" onclick="toggleSettings(false)">Close</button>
-    </div>
+  <div class="settings-overlay" id="settingsPanel" onclick="if(event.target===this)closeSettings()">
+    <div class="settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
+      <div class="settings-modal-head">
+        <h2>Settings</h2>
+        <button class="settings-modal-close" onclick="closeSettings()" aria-label="Close settings">&times;</button>
+      </div>
+      <div class="settings-modal-body">
 
     <div class="admin-section" id="settingsInstallSection" style="display:none;">
       <h3>Install App</h3>
@@ -1937,6 +1964,8 @@
         <div id="settingsQueueList"><div class="panel-empty">Queue is empty.</div></div>
       </div>
       <div class="settings-msg" id="storageMsg"></div>
+    </div>
+      </div>
     </div>
   </div>
 </main>
@@ -2034,16 +2063,17 @@ async function logout() {
   var uName = document.getElementById('userName'); if (uName) uName.textContent = '';
   var uTitle = document.getElementById('userTitle'); if (uTitle) uTitle.textContent = '';
   var ack = document.getElementById('disclaimerCheck'); if (ack) { ack.checked = false; document.getElementById('authBtn').disabled = true; }
-  var adminBtn = document.getElementById('adminBtn'); if (adminBtn) adminBtn.classList.add('admin-hidden');
+  var moreAdminItem = document.getElementById('moreAdminItem'); if (moreAdminItem) moreAdminItem.classList.add('admin-hidden');
   var adminPanel = document.getElementById('adminPanel'); if (adminPanel) adminPanel.classList.remove('visible');
-  var settingsPanel = document.getElementById('settingsPanel'); if (settingsPanel) settingsPanel.classList.remove('visible');
+  closeMoreMenu();
+  closeSettings();
 }
 
 function updateAdminVisibility() {
-  var btn = document.getElementById('adminBtn');
-  if (!btn) return;
+  var item = document.getElementById('moreAdminItem');
+  if (!item) return;
   var isShepherd = !!(authUser && authUser.username === 'shepherd');
-  btn.classList.toggle('admin-hidden', !isShepherd);
+  item.classList.toggle('admin-hidden', !isShepherd);
 }
 
 async function toggleAdmin() {
@@ -4131,23 +4161,57 @@ function showModal(title, bodyHtml, actions) {
   document.getElementById('modalOverlay').classList.add('visible');
 }
 function closeModal() { document.getElementById('modalOverlay').classList.remove('visible'); }
-function toggleSettings(force) {
+function openSettings() {
+  closeMoreMenu();
   var panel = document.getElementById('settingsPanel'); if (!panel) return;
-  var show = (typeof force === 'boolean') ? force : !panel.classList.contains('visible');
-  if (show) {
-    var dl = document.getElementById('dailyLog'); if (dl) dl.classList.remove('visible');
-    var ap = document.getElementById('adminPanel'); if (ap) ap.classList.remove('visible');
-    updateInstallSectionVisibility();
-    loadProfileFields();
-    loadNotifToggles();
-    updateStorageEstimate();
-    var iMsg = document.getElementById('installMsg'); if (iMsg) iMsg.classList.remove('visible');
-    panel.classList.add('visible');
-    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } else {
-    panel.classList.remove('visible');
-  }
+  updateInstallSectionVisibility();
+  loadProfileFields();
+  loadNotifToggles();
+  updateStorageEstimate();
+  var iMsg = document.getElementById('installMsg'); if (iMsg) iMsg.classList.remove('visible');
+  var sqp = document.getElementById('settingsQueuePanel'); if (sqp) sqp.classList.remove('visible');
+  panel.classList.add('visible');                 // fixed overlay -> page scroll position is preserved
+  document.body.classList.add('modal-open');
+  panel.scrollTop = 0;
 }
+function closeSettings() {
+  var panel = document.getElementById('settingsPanel'); if (!panel) return;
+  panel.classList.remove('visible');
+  document.body.classList.remove('modal-open');
+}
+
+/* ---- Header "More" menu (Settings + Admin) ---- */
+function toggleMoreMenu(e) {
+  if (e) e.stopPropagation();
+  var menu = document.getElementById('moreMenu');
+  var btn = document.getElementById('moreBtn');
+  if (!menu) return;
+  var open = !menu.classList.contains('open');
+  menu.classList.toggle('open', open);
+  if (btn) { btn.classList.toggle('open', open); btn.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+}
+function closeMoreMenu() {
+  var menu = document.getElementById('moreMenu'); if (menu) menu.classList.remove('open');
+  var btn = document.getElementById('moreBtn'); if (btn) { btn.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); }
+}
+function openAdminFromMenu() {
+  closeMoreMenu();
+  var panel = document.getElementById('adminPanel');
+  if (panel && !panel.classList.contains('visible')) { toggleAdmin(); }
+  else if (panel) { panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+}
+// Close the menu on any outside click or Escape.
+document.addEventListener('click', function (e) {
+  var wrap = document.querySelector('.more-wrap');
+  if (wrap && !wrap.contains(e.target)) closeMoreMenu();
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') {
+    closeMoreMenu();
+    var sp = document.getElementById('settingsPanel');
+    if (sp && sp.classList.contains('visible')) closeSettings();
+  }
+});
 
 (async function initPWA() {
   await refreshConnState();
