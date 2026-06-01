@@ -1607,7 +1607,7 @@
     </div>
     <div class="progress-note">Stages are estimated, not live status. Keep this screen open; you can lock the phone, but leaving the app may interrupt the request (it will be recovered on return).</div>
     <div class="pstage" id="pstage-0"><span class="pmark"></span><span>Classifying discipline</span></div>
-    <div class="pstage" id="pstage-1"><span class="pmark"></span><span>Querying the document library (NotebookLM)</span></div>
+    <div class="pstage" id="pstage-1"><span class="pmark"></span><span>Querying the document library</span></div>
     <div class="pstage" id="pstage-2"><span class="pmark"></span><span>Evaluating against regulatory citations</span></div>
     <div class="pstage" id="pstage-3"><span class="pmark"></span><span>Cross-checking and finalizing</span></div>
   </div>
@@ -2365,27 +2365,31 @@ async function submitObservation() {
   var text = textarea.value.trim();
   if (!text) { textarea.focus(); return; }
 
-  // Offline: persist to the durable queue and send automatically on reconnect.
-  if (!navigator.onLine) {
-    var offPayload = { observation: text, building_number: buildingNumber };
-    if (attachedPhotoBase64) { offPayload.image = attachedPhotoBase64; offPayload.image_thumbnail = attachedThumbBase64; }
-    if (authUser) { offPayload.inspector_username = authUser.username; offPayload.inspector_display_name = authUser.display_name; }
-    await CARL.enqueue(offPayload);
-    await refreshQueueUI();
+  var errorMsg = document.getElementById('errorMsg');
+  var showErr = function (m) { errorMsg.textContent = m; errorMsg.classList.add('visible'); };
+
+  // Build the payload and persist it to the durable outbox BEFORE sending, so the
+  // submission survives a connection drop, reload, or app suspension.
+  var payload = { observation: text, building_number: buildingNumber };
+  if (attachedPhotoBase64) { payload.image = attachedPhotoBase64; payload.image_thumbnail = attachedThumbBase64; }
+  if (authUser) { payload.inspector_username = authUser.username; payload.inspector_display_name = authUser.display_name; }
+  var item = await CARL.enqueue(payload);
+  await refreshQueueUI();
+
+  // Active connectivity check -- do NOT trust navigator.onLine (unreliable on iOS).
+  var online = await probeConnectivity(4000);
+  setConnState(online);
+  if (!online) {
     clearComposeAfterQueue();
-    var emOff = document.getElementById('errorMsg');
-    emOff.textContent = 'No connection. Saved to the submission queue and will send automatically when you are back online.';
-    emOff.classList.add('visible');
+    showErr('No connection. Saved to the submission queue and will send automatically when you are back online.');
     return;
   }
 
   setAskMode(false);
-
   var btn = document.getElementById('submitBtn');
   var loading = document.getElementById('loading');
   var loadingText = loading.querySelector('span');
   var originalLoadingText = loadingText ? loadingText.textContent : '';
-  var errorMsg = document.getElementById('errorMsg');
   var results = document.getElementById('results');
 
   btn.disabled = true;
@@ -2395,71 +2399,83 @@ async function submitObservation() {
   errorMsg.classList.remove('visible');
   results.classList.remove('visible');
 
-  var pollTimer = null;
-  var deadlineTimer = null;
-  var stopPolling = function() {
+  var pollTimer = null, deadlineTimer = null, watchdog = null, settled = false;
+  var ackController = new AbortController();
+  var stopAll = function () {
     if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
     if (deadlineTimer) { clearTimeout(deadlineTimer); deadlineTimer = null; }
+    if (watchdog) { clearInterval(watchdog); watchdog = null; }
   };
-  var finish = function() {
-    stopPolling();
+  var finish = function () {
+    stopAll();
     btn.disabled = false;
     loading.classList.remove('visible');
-    stopProgress();
-    releaseWakeLock();
+    stopProgress(); releaseWakeLock();
     if (loadingText) loadingText.textContent = originalLoadingText;
   };
 
+  // Connectivity watchdog: if the connection drops mid-request, hand off to the
+  // queue immediately instead of stalling until the 180s timeout.
+  var failedProbes = 0;
+  var onConnectionLost = async function () {
+    if (settled) return; settled = true;
+    try { ackController.abort(); } catch (e) {}
+    item.status = 'sent'; // dispatched but result unconfirmed -> recovery candidate
+    try { await CARL.updateOutbox(item); } catch (e) {}
+    setConnState(false);
+    finish(); await refreshQueueUI();
+    showErr('Connection lost while CARL was processing. Your observation is saved in the queue and will recover its result or resend automatically when you are back online.');
+  };
+  watchdog = setInterval(async function () {
+    if (settled) return;
+    var ok = await probeConnectivity(4000);
+    if (ok) { failedProbes = 0; setConnState(true); }
+    else { failedProbes++; if (failedProbes >= 2) onConnectionLost(); }
+  }, 10000);
+
   try {
+    item.status = 'sending'; try { await CARL.updateOutbox(item); } catch (e) {} await refreshQueueUI();
+
     var preEntries = [];
     try { preEntries = await fetchTodayLogEntries(); }
-    catch (e) { if (e.message === 'auth') return; }
+    catch (e) { if (e.message === 'auth') { finish(); return; } }
     var preIds = {};
-    preEntries.forEach(function(e) { if (e.processed_at) preIds[e.processed_at] = true; });
+    preEntries.forEach(function (e) { if (e.processed_at) preIds[e.processed_at] = true; });
 
-    var ackController = new AbortController();
-    var ackTimeout = setTimeout(function() { ackController.abort(); }, 180000);
-
-    var payload = { observation: text, building_number: buildingNumber };
-    if (attachedPhotoBase64) {
-      payload.image = attachedPhotoBase64;
-      payload.image_thumbnail = attachedThumbBase64;
-    }
-    if (authUser) {
-      payload.inspector_username = authUser.username;
-      payload.inspector_display_name = authUser.display_name;
-    }
+    var ackTimeout = setTimeout(function () { ackController.abort(); }, 180000);
 
     var resp = await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      mode: 'cors',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      method: 'POST', mode: 'cors',
+      headers: authHeaders({ 'Content-Type': 'application/json', 'X-CARL-Idempotency': item.idempotencyKey }),
       body: JSON.stringify(payload),
       signal: ackController.signal
     });
     clearTimeout(ackTimeout);
+    if (settled) return;
 
-    if (resp.status === 401) { handleAuthFailure(); finish(); return; }
+    if (resp.status === 401) { handleAuthFailure(); item.status = 'queued'; try { await CARL.updateOutbox(item); } catch (e) {} finish(); await refreshQueueUI(); return; }
     if (!resp.ok) throw new Error('Webhook returned HTTP ' + resp.status);
 
-    var POLL_INTERVAL_MS = 4000;
-    var DEADLINE_MS = 180000;
+    var POLL_INTERVAL_MS = 4000, DEADLINE_MS = 180000;
     var todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Guam' });
 
-    var poll = async function() {
+    var poll = async function () {
       pollTimer = null;
+      if (settled) return;
       try {
         var entries = await fetchTodayLogEntries();
-        var fresh = entries.filter(function(e) {
+        var fresh = entries.filter(function (e) {
           if (!e.processed_at || preIds[e.processed_at]) return false;
           if (e.entry_date && e.entry_date !== todayStr) return false;
           return true;
         });
         if (fresh.length > 0) {
-          fresh.sort(function(a, b) { return new Date(b.processed_at) - new Date(a.processed_at); });
-          console.log('[CARL poll] new entry detected:', JSON.stringify(fresh[0], null, 2));
-          renderResults(adaptLogEntryForRender(fresh[0]));
-          finish();
+          fresh.sort(function (a, b) { return new Date(b.processed_at) - new Date(a.processed_at); });
+          settled = true;
+          var adapted = adaptLogEntryForRender(fresh[0]);
+          renderResults(adapted);
+          try { await CARL.deleteOutbox(item.id); } catch (e) {} // success -> drop from queue (result is on screen + in the daily log)
+          finish(); await refreshQueueUI();
           return;
         }
       } catch (e) {
@@ -2468,30 +2484,27 @@ async function submitObservation() {
       pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
     };
 
-    deadlineTimer = setTimeout(function() {
-      stopPolling();
-      btn.disabled = false;
-      loading.classList.remove('visible');
-      stopProgress();
-      releaseWakeLock();
-      if (loadingText) loadingText.textContent = originalLoadingText;
-      errorMsg.textContent = 'Timed out waiting for evaluation result (3 minutes). The observation may still be processing -- check the daily log shortly.';
-      errorMsg.classList.add('visible');
+    deadlineTimer = setTimeout(async function () {
+      if (settled) return; settled = true;
+      item.status = 'sent'; try { await CARL.updateOutbox(item); } catch (e) {}
+      finish(); await refreshQueueUI();
+      showErr('Timed out waiting for the evaluation result (3 minutes). It may still be processing -- the result will be recovered from the daily log, or tap QUEUE to retry.');
     }, DEADLINE_MS);
 
     pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
   } catch (err) {
-    var msg = 'Request failed: ';
-    if (err.name === 'AbortError') {
-      msg += 'Submission timed out. Check your network connection.';
-    } else if (err.message.indexOf('Failed to fetch') >= 0 || err.message.indexOf('NetworkError') >= 0) {
-      msg += 'Unable to reach the CARL webhook. Check your network connection.';
+    if (settled) return; settled = true;
+    var net = err.name === 'AbortError' || (err.message && (err.message.indexOf('Failed to fetch') >= 0 || err.message.indexOf('NetworkError') >= 0));
+    if (net) {
+      item.status = 'queued'; try { await CARL.updateOutbox(item); } catch (e) {} // never reached the server -> retry on reconnect
+      setConnState(false);
+      finish(); await refreshQueueUI();
+      showErr('Could not reach CARL. Saved to the queue and will retry automatically when the connection returns.');
     } else {
-      msg += err.message;
+      item.status = 'error'; item.error = err.message; try { await CARL.updateOutbox(item); } catch (e) {}
+      finish(); await refreshQueueUI();
+      showErr('Request failed: ' + err.message + '. Saved in the queue; tap QUEUE to retry.');
     }
-    errorMsg.textContent = msg;
-    errorMsg.classList.add('visible');
-    finish();
   }
 }
 
@@ -3529,9 +3542,11 @@ function stopProgress() {
   setTimeout(function () { card.classList.remove('visible'); }, 400);
 }
 
-/* ---- Connection indicator ---- */
-function updateConnUI() {
-  var online = navigator.onLine;
+/* ---- Connection state (active probe; navigator.onLine is unreliable on iOS,
+ *      it commonly reports online in airplane mode and skips online/offline
+ *      events, so we verify with a real network probe). ---- */
+var _connOnline = true;
+function applyConnUI(online) {
   var dot = document.getElementById('dotConn');
   var tip = document.getElementById('tipConn');
   var banner = document.getElementById('offlineBanner');
@@ -3539,6 +3554,41 @@ function updateConnUI() {
   if (tip) tip.textContent = online ? 'Online' : 'Offline - submissions will queue';
   if (banner) banner.classList.toggle('visible', !online);
 }
+function setConnState(online) {
+  online = !!online;
+  var changed = (online !== _connOnline);
+  _connOnline = online;
+  applyConnUI(online);
+  if (changed && online) onReconnect();
+}
+// Resolves true if the network is actually reachable, false otherwise.
+function probeConnectivity(timeoutMs) {
+  return new Promise(function (resolve) {
+    if (navigator.onLine === false) { resolve(false); return; } // false is trustworthy; true is not
+    var ctrl = new AbortController();
+    var t = setTimeout(function () { ctrl.abort(); }, timeoutMs || 5000);
+    // Same-origin, cache-busted GET. Same-origin avoids the no-cors opaque-resolve
+    // ambiguity (a blocked no-cors fetch can falsely resolve). The unique query
+    // misses the service-worker cache, forcing a real network round-trip, so it
+    // rejects (or returns !ok) on genuine network loss -- e.g. airplane mode, where
+    // the page host itself becomes unreachable even if navigator.onLine lies true.
+    fetch('/manifest.webmanifest?_probe=' + Date.now(), { method: 'GET', cache: 'no-store', signal: ctrl.signal })
+      .then(function (r) { clearTimeout(t); resolve(!!r && r.ok); })
+      .catch(function () { clearTimeout(t); resolve(false); });
+  });
+}
+// Debounced indicator update: navigator.onLine===false is authoritative (instant
+// offline); when it claims online but probes fail, require 2 consecutive failures
+// before flipping the indicator offline, so an intermittent connection does not
+// thrash the badge. The submit decision uses a single live probe (decided instantly).
+var _probeStrikes = 0;
+async function refreshConnState() {
+  if (navigator.onLine === false) { _probeStrikes = 0; setConnState(false); return; }
+  var ok = await probeConnectivity(5000);
+  if (ok) { _probeStrikes = 0; setConnState(true); }
+  else { _probeStrikes++; if (_probeStrikes >= 2) setConnState(false); }
+}
+var updateConnUI = refreshConnState; // back-compat alias for existing callers
 
 /* ---- Submission queue UI ---- */
 async function refreshQueueUI() {
@@ -3562,7 +3612,7 @@ async function refreshQueueUI() {
 async function viewQueued(id) { var rows = await CARL.listOutbox(); var it = rows.find(function (x) { return x.id === id; }); if (it && it.result) { renderResults(it.result); document.getElementById('results').scrollIntoView({ behavior: 'smooth' }); } }
 async function removeQueued(id) { await CARL.deleteOutbox(id); await refreshQueueUI(); }
 async function retryQueued(id) {
-  if (!navigator.onLine) { alert('Still offline. It will retry automatically when you reconnect.'); return; }
+  if (!(await probeConnectivity(4000))) { setConnState(false); alert('Still offline. It will retry automatically when you reconnect.'); return; }
   var rows = await CARL.listOutbox(); var it = rows.find(function (x) { return x.id === id; }); if (!it) return;
   it.status = 'queued'; await CARL.updateOutbox(it);
   startProgress(); acquireWakeLock();
@@ -3630,7 +3680,7 @@ function togglePanel(id, force) {
 
 /* ---- Reconnect / foreground: recover then flush queue ---- */
 async function onReconnect() {
-  if (!navigator.onLine) return;
+  if (!_connOnline) return;
   try { await CARL.recoverStuck(); } catch (e) {}
   try { await CARL.flushQueued(); } catch (e) {}
   await refreshQueueUI();
@@ -3640,20 +3690,23 @@ async function onReconnect() {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function (e) { console.warn('SW registration failed', e); }); });
 }
-window.addEventListener('online', function () { updateConnUI(); onReconnect(); });
-window.addEventListener('offline', updateConnUI);
+// online/offline events are hints, not truth -> always verify with a probe.
+window.addEventListener('online', refreshConnState);
+window.addEventListener('offline', function () { setConnState(false); });
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'visible') {
     if (_progressActive && !_wakeLock) acquireWakeLock();
-    updateConnUI(); onReconnect();
+    refreshConnState();
   }
 });
+// Periodic probe so the indicator stays correct even when iOS never fires events.
+setInterval(function () { if (document.visibilityState === 'visible') refreshConnState(); }, 8000);
 (function () {
   var b = document.getElementById('buildingNumber'); if (b) b.addEventListener('input', scheduleAutosave);
   var o = document.getElementById('observation'); if (o) o.addEventListener('input', scheduleAutosave);
 })();
 (async function initPWA() {
-  updateConnUI();
+  await refreshConnState();
   try { await refreshQueueUI(); } catch (e) {}
   try { await refreshDraftsUI(); } catch (e) {}
   if (window.CARL) CARL.registerSync();
@@ -3666,7 +3719,7 @@ document.addEventListener('visibilitychange', function () {
       if (aw.photoBase64) { attachedPhotoBase64 = aw.photoBase64; attachedThumbBase64 = aw.thumbBase64 || null; document.getElementById('photoThumb').src = 'data:image/jpeg;base64,' + (aw.thumbBase64 || aw.photoBase64); document.getElementById('photoPreview').classList.add('visible'); }
     }
   } catch (e) {}
-  if (navigator.onLine) onReconnect();
+  if (_connOnline) onReconnect();
 })();
 </script>
 
