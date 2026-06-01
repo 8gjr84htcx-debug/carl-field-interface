@@ -6,12 +6,17 @@
  *             updateOutbox, deleteOutbox
  *   Plumbing: registerSync, onChange, uid
  *
- * Shared IndexedDB contract with sw.js: DB "carl-field" v1, stores "drafts" and "outbox"
- * (both keyPath "id"). Outbox item:
+ * Shared IndexedDB contract with sw.js: DB "carl-field" v2, stores "drafts", "outbox"
+ * (both keyPath "id") and "secure" (keyPath "k"). Outbox item:
  *   { id, status: 'queued'|'sending'|'sent'|'done'|'error', payload, idempotencyKey,
  *     createdAt, completedAt?, result?, error? }
  *   'sent' = dispatched but the response was lost (page killed / timeout) — the server may
  *   have finished; recoverStuck() tries to fetch the result from the daily report.
+ *
+ * "secure" holds offline-auth material owned by carl-offline-auth.js: non-extractable
+ * CryptoKey objects (device keypair, cache AES key) and the encrypted credential cache
+ * blob. carl-db.js owns the single DB handle; offline-auth reaches it via secureGet/
+ * securePut/secureDel/secureClear so there is only one onupgradeneeded path.
  */
 (function () {
   'use strict';
@@ -24,6 +29,13 @@
   var listeners = [];
   function emitChange() { listeners.forEach(function (cb) { try { cb(); } catch (e) {} }); }
 
+  // Audit provider: carl-offline-auth.js (or index.html) registers a function that returns
+  // { device_fingerprint, auth_mode, online } for the current session. Kept as a hook so the
+  // storage layer never imports auth state directly. Returns {} until registered.
+  var auditProvider = null;
+  function setAuditProvider(fn) { auditProvider = (typeof fn === 'function') ? fn : null; }
+  function audit() { try { return (auditProvider && auditProvider()) || {}; } catch (e) { return {}; } }
+
   function uid() {
     return (self.crypto && crypto.randomUUID)
       ? crypto.randomUUID()
@@ -33,11 +45,12 @@
   /* ---------------- IndexedDB ---------------- */
   function openDB() {
     return new Promise(function (resolve, reject) {
-      var r = indexedDB.open('carl-field', 1);
+      var r = indexedDB.open('carl-field', 2);
       r.onupgradeneeded = function () {
         var db = r.result;
         if (!db.objectStoreNames.contains('drafts')) db.createObjectStore('drafts', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('secure')) db.createObjectStore('secure', { keyPath: 'k' });
       };
       r.onsuccess = function () { resolve(r.result); };
       r.onerror = function () { reject(r.error); };
@@ -59,12 +72,26 @@
   function put(store, val) { return tx(store, 'readwrite', function (os) { os.put(val); return val; }); }
   function del(store, id) { return tx(store, 'readwrite', function (os) { os.delete(id); }); }
   function get(store, id) { return tx(store, 'readonly', function (os) { return os.get(id); }); }
+  function clear(store) { return tx(store, 'readwrite', function (os) { os.clear(); }); }
+
+  /* ---------------- Secure store (offline-auth material) ----------------
+   * Records are { k, v } where v may be a non-extractable CryptoKey or an
+   * encrypted blob. Owned by carl-offline-auth.js; storage lives here so the
+   * DB has a single upgrade path. */
+  function securePut(k, v) { return put('secure', { k: k, v: v }); }
+  function secureGet(k) { return get('secure', k).then(function (rec) { return rec ? rec.v : null; }); }
+  function secureDel(k) { return del('secure', k); }
+  function secureClear() { return clear('secure'); }
 
   /* ---------------- Drafts ---------------- */
   function saveDraft(draft) {
     var d = Object.assign({}, draft);
     if (!d.id) d.id = uid();
     d.updatedAt = Date.now();
+    // Audit trail: stamp the saving device + auth mode on every draft.
+    var a = audit();
+    if (a.device_fingerprint && d.device_fingerprint == null) d.device_fingerprint = a.device_fingerprint;
+    if (a.auth_mode && d.auth_mode == null) d.auth_mode = a.auth_mode;
     return put('drafts', d).then(function (v) { emitChange(); return v; });
   }
   function listDrafts() {
@@ -77,10 +104,18 @@
 
   /* ---------------- Outbox ---------------- */
   function enqueue(payload) {
+    // Audit trail: capture-time identity + connectivity, stamped into the payload so the
+    // server logs who/where/when each observation was made and whether it was offline.
+    var a = audit();
+    var p = Object.assign({}, payload);
+    if (p.device_fingerprint == null && a.device_fingerprint) p.device_fingerprint = a.device_fingerprint;
+    if (p.auth_mode == null && a.auth_mode) p.auth_mode = a.auth_mode;
+    if (p.captured_at == null) p.captured_at = Date.now();
+    if (p.captured_offline == null && a.online != null) p.captured_offline = !a.online;
     var item = {
       id: uid(),
       status: 'queued',
-      payload: payload,
+      payload: p,
       idempotencyKey: uid(),
       createdAt: Date.now()
     };
@@ -104,6 +139,10 @@
   function sendItem(item, opts) {
     opts = opts || {};
     item.status = 'sending';
+    // Audit trail: record the moment of actual dispatch and whether the device was online then.
+    var a = audit();
+    item.payload.sent_at = Date.now();
+    item.payload.sent_online = (a.online != null) ? a.online : navigator.onLine;
     return updateOutbox(item).then(function () {
       var controller = new AbortController();
       var timedOut = false;
@@ -221,6 +260,8 @@
     enqueue: enqueue, listOutbox: listOutbox, pendingCount: pendingCount,
     sendItem: sendItem, flushQueued: flushQueued, recoverStuck: recoverStuck,
     updateOutbox: updateOutbox, deleteOutbox: deleteOutbox,
+    securePut: securePut, secureGet: secureGet, secureDel: secureDel, secureClear: secureClear,
+    setAuditProvider: setAuditProvider,
     registerSync: registerSync, onChange: onChange, uid: uid
   };
 

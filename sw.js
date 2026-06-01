@@ -8,11 +8,12 @@
  *   - Best-effort Background Sync (Android/Chromium only) to flush the outbox after the
  *     page has closed. iOS has no Background Sync; the page handles retry/recovery there.
  *
- * Shared IndexedDB contract with carl-db.js: DB "carl-field" v1, store "outbox"
- * (keyPath "id"), items { id, status, payload, idempotencyKey, createdAt, result }.
+ * Shared IndexedDB contract with carl-db.js: DB "carl-field" v2, stores "outbox"
+ * (keyPath "id"), items { id, status, payload, idempotencyKey, createdAt, result }, plus
+ * "drafts" and "secure" (offline-auth material, owned by carl-offline-auth.js).
  * Bump SHELL_CACHE when shell assets change to force an update.
  */
-const SHELL_CACHE = 'carl-shell-v4';
+const SHELL_CACHE = 'carl-shell-v5';
 const WEBHOOK_URL = 'https://n8n.carlcompliance.com/webhook/carl-verify';
 
 const SHELL_ASSETS = [
@@ -20,6 +21,7 @@ const SHELL_ASSETS = [
   '/index.html',
   '/manifest.webmanifest',
   '/carl-db.js',
+  '/carl-offline-auth.js',
   '/offline.html',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -101,11 +103,12 @@ self.addEventListener('sync', (event) => {
 
 function idbOpen() {
   return new Promise((resolve, reject) => {
-    const r = indexedDB.open('carl-field', 1);
+    const r = indexedDB.open('carl-field', 2);
     r.onupgradeneeded = () => {
       const db = r.result;
       if (!db.objectStoreNames.contains('drafts')) db.createObjectStore('drafts', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('secure')) db.createObjectStore('secure', { keyPath: 'k' });
     };
     r.onsuccess = () => resolve(r.result);
     r.onerror = () => reject(r.error);

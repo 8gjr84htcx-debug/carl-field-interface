@@ -1956,6 +1956,11 @@
     </div>
 
     <div class="admin-section">
+      <h3>Device &amp; Access</h3>
+      <div class="storage-text" id="deviceAccessInfo">This device is not yet bound.</div>
+    </div>
+
+    <div class="admin-section">
       <h3>Cache &amp; Storage</h3>
       <div class="storage-meter">
         <div class="storage-bar"><span id="storageFill"></span></div>
@@ -1992,6 +1997,7 @@
 </div>
 
 <script src="/carl-db.js"></script>
+<script src="/carl-offline-auth.js"></script>
 <script>
 var DAILY_REPORT_URL = 'https://n8n.carlcompliance.com/webhook/carl-daily-report';
 var ASK_RESULT_URL = 'https://n8n.carlcompliance.com/webhook/carl-ask-result';
@@ -2002,10 +2008,145 @@ var authUser = null;
 var attachedPhotoBase64 = null;
 var attachedThumbBase64 = null;
 
+// ---- Offline-auth state (see carl-offline-auth.js) ----
+var authState = null;          // one of CARLAuth.STATES
+var _authCache = null;         // last decrypted credential cache
+var _offlineAuthDisabled = false; // true when the device can't store a non-extractable key
+var _actionsBlocked = false;   // true in GRACE_EXPIRED: drafts/queue stay readable, new actions blocked
+var _authEvalBusy = false;
+
 function authHeaders(extra) {
   var h = extra ? Object.assign({}, extra) : {};
   if (authToken) h['Authorization'] = 'Bearer ' + authToken;
   return h;
+}
+
+/* ---- Offline-auth: central state driver ----
+ * Decides, on boot / reconnect / disconnect / 401, whether the user is in the app
+ * (online or on grace) or must sign in, and refreshes the sliding window when online. */
+async function evaluateAuthState(ctx) {
+  if (!window.CARLAuth) { showAuthScreen(); return; }
+  if (_authEvalBusy) return;
+  _authEvalBusy = true;
+  try {
+    var cache = await CARLAuth.loadCache();
+    if (!cache) { _authCache = null; authState = CARLAuth.STATES.UNAUTHENTICATED; showAuthScreen(); return; }
+    _authCache = cache;
+    // Populate identity from the cache so name/title/username work even with no live session.
+    if (!authUser) authUser = { username: cache.username, display_name: cache.display_name, title: cache.title };
+    var online = _connOnline;
+    if (online) {
+      var res = await CARLAuth.refreshOnline();
+      switch (res.status) {
+        case CARLAuth.STATES.ONLINE_AUTHED:
+          _authCache = res.cache || cache; enterApp('online'); break;
+        case CARLAuth.STATES.OFFLINE:
+          // network blipped mid-refresh — fall back to the local view
+          applyLocalState(CARLAuth.computeState(cache, false)); break;
+        case CARLAuth.STATES.HARD_REAUTH:
+          showAuthScreen('Periodic sign-in required. Please sign in to continue.'); break;
+        case CARLAuth.STATES.REVOKED_OR_TAMPERED:
+          _authCache = null; authUser = null; showAuthScreen('Your session has ended. Please sign in.'); break;
+        default:
+          _authCache = null; authUser = null; showAuthScreen(); break;
+      }
+    } else {
+      applyLocalState(CARLAuth.computeState(cache, false));
+    }
+  } catch (e) {
+    // Never hard-lock on an unexpected error if a cache exists; degrade to offline-grace view.
+    if (_authCache) applyLocalState(CARLAuth.computeState(_authCache, false));
+    else showAuthScreen();
+  } finally {
+    _authEvalBusy = false;
+    updateOfflineNotice();
+  }
+}
+
+function applyLocalState(st) {
+  if (st === CARLAuth.STATES.OFFLINE_GRACE) enterApp('grace');
+  else if (st === CARLAuth.STATES.GRACE_EXPIRED) enterGraceExpired();
+  else if (st === CARLAuth.STATES.ONLINE_AUTHED) enterApp('online');
+  else if (st === CARLAuth.STATES.HARD_REAUTH) showAuthScreen('Periodic sign-in required. Please sign in to continue.');
+  else showAuthScreen();
+}
+
+// Reveal the app (online or grace). Field submissions never require the live session token,
+// so the queue/offline flow works identically in both modes.
+function enterApp(mode) {
+  authState = (mode === 'grace') ? CARLAuth.STATES.OFFLINE_GRACE : CARLAuth.STATES.ONLINE_AUTHED;
+  _actionsBlocked = false;
+  document.body.classList.remove('grace-expired');
+  setComposeBlocked(false);
+  if (window.CARLAuth) CARLAuth.setStatus({ mode: (mode === 'grace') ? 'grace' : 'online', online: _connOnline });
+  if (authUser) {
+    document.getElementById('userName').textContent = authUser.display_name || '';
+    document.getElementById('userTitle').textContent = authUser.title || '';
+  }
+  applyProfileOverride();
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('appContent').classList.add('visible');
+  updateAdminVisibility();
+}
+
+// Offline grace fully expired: keep drafts + queue reachable, block new observations.
+function enterGraceExpired() {
+  authState = CARLAuth.STATES.GRACE_EXPIRED;
+  _actionsBlocked = true;
+  document.body.classList.add('grace-expired');
+  if (window.CARLAuth) CARLAuth.setStatus({ mode: 'grace', online: _connOnline });
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('appContent').classList.add('visible');
+  setComposeBlocked(true);
+  updateAdminVisibility();
+}
+
+function showAuthScreen(message) {
+  authState = CARLAuth.STATES ? CARLAuth.STATES.UNAUTHENTICATED : 'UNAUTHENTICATED';
+  _actionsBlocked = false;
+  document.body.classList.remove('grace-expired');
+  document.getElementById('appContent').classList.remove('visible');
+  document.getElementById('authScreen').style.display = '';
+  var err = document.getElementById('authError');
+  if (err) {
+    if (message) { err.textContent = message; err.classList.add('visible'); }
+    else { err.classList.remove('visible'); }
+  }
+}
+
+// Disable the compose/submit affordances without hiding the queue or drafts panels.
+function setComposeBlocked(blocked) {
+  var ids = ['observation', 'buildingNumber', 'submitBtn', 'askBtn'];
+  ids.forEach(function (id) { var el = document.getElementById(id); if (el) el.disabled = !!blocked; });
+}
+
+function fmtVerified(ts) {
+  try { return new Date(ts).toLocaleString('en-US', { timeZone: 'Pacific/Guam', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  catch (e) { return new Date(ts).toLocaleString(); }
+}
+
+// Offline notice text per policy: last-verified timestamp + a <24h expiry countdown.
+function updateOfflineNotice() {
+  var banner = document.getElementById('offlineBanner');
+  if (!banner) return;
+  if (_connOnline) { banner.classList.remove('visible'); return; }
+  if (authState === CARLAuth.STATES.GRACE_EXPIRED) {
+    banner.textContent = 'Offline access expired. Reconnect to sign in. Drafts and the queue remain available.';
+    banner.classList.add('visible');
+    return;
+  }
+  if (_authCache) {
+    var txt = 'Working offline. Last verified ' + fmtVerified(_authCache.lastAuthAt) + '. Submissions will send when reconnected.';
+    var claims = (CARLAuth.parseClaims(_authCache.graceToken)) || {};
+    var exp = Math.min(claims.gexp != null ? claims.gexp : Infinity, claims.hexp != null ? claims.hexp : Infinity);
+    var hrs = (exp - Date.now()) / 3600000;
+    if (hrs > 0 && hrs < 24) txt += ' Offline access expires in ' + Math.max(1, Math.round(hrs)) + 'h.';
+    banner.textContent = txt;
+    banner.classList.add('visible');
+    return;
+  }
+  banner.textContent = 'Offline · observations will be saved and submitted when you reconnect';
+  banner.classList.add('visible');
 }
 
 async function login() {
@@ -2038,12 +2179,19 @@ async function login() {
     var data = await resp.json();
     authToken = data.token;
     authUser = data.user;
-    document.getElementById('userName').textContent = authUser.display_name || '';
-    document.getElementById('userTitle').textContent = authUser.title || '';
-    applyProfileOverride();
-    document.getElementById('authScreen').style.display = 'none';
-    document.getElementById('appContent').classList.add('visible');
-    updateAdminVisibility();
+    // Bind this device + cache an encrypted, device-bound grace token for offline use.
+    // Fail-closed: if the device can't store a non-extractable key, run online-only.
+    if (window.CARLAuth) {
+      try {
+        _authCache = await CARLAuth.firstTimeProvision(data.token, data.user);
+        _offlineAuthDisabled = false;
+      } catch (e) {
+        _offlineAuthDisabled = (e && /secure-storage-unavailable/.test(e.message || ''));
+        // Other failures (e.g. /device/register unreachable) leave us online-only this
+        // session; the next successful login retries provisioning.
+      }
+    }
+    enterApp('online');
     document.getElementById('observation').focus();
   } catch (err) {
     error.textContent = 'Unable to reach authentication service.';
@@ -2055,6 +2203,9 @@ async function logout() {
   var token = authToken;
   authToken = null;
   authUser = null;
+  _authCache = null;
+  // User-initiated sign-out: wipe the device-bound cache + keys (full reset).
+  if (window.CARLAuth) { try { await CARLAuth.clearCache(); } catch (e) {} }
   try {
     if (token) {
       await fetch(AUTH_URL + '/logout', {
@@ -2063,6 +2214,7 @@ async function logout() {
       });
     }
   } catch (e) { /* ignore — local state already cleared */ }
+  authState = CARLAuth.STATES.UNAUTHENTICATED;
   document.getElementById('appContent').classList.remove('visible');
   document.getElementById('authScreen').style.display = '';
   var uInput = document.getElementById('usernameInput'); if (uInput) uInput.value = '';
@@ -2416,8 +2568,14 @@ function escapeAttr(s) {
 }
 
 function handleAuthFailure() {
-  // Called when a webhook returns 401 — token expired or invalid
-  logout();
+  // A 401 means the live 10-hour session token died. Do NOT drop a still-valid
+  // offline-auth user to the login screen — re-evaluate against the device-bound cache.
+  // When online this slides the window / catches revocation; when offline (or on grace)
+  // the user keeps working and submissions keep queuing. Only an empty/revoked/expired
+  // cache, or the 30-day checkpoint, forces a fresh sign-in.
+  authToken = null;
+  if (window.CARLAuth) { evaluateAuthState({ trigger: 'auth-failure' }); }
+  else { logout(); }
 }
 
 document.getElementById('usernameInput').addEventListener('keydown', function(e) {
@@ -2442,6 +2600,7 @@ async function askObservation() {
   var textarea = document.getElementById('observation');
   var text = textarea.value.trim();
   if (!text) { textarea.focus(); return; }
+  if (_actionsBlocked) { return; }
   if (!authUser || !authUser.username) { handleAuthFailure(); return; }
 
   setAskMode(true);
@@ -2602,6 +2761,8 @@ async function submitObservation() {
 
   var errorMsg = document.getElementById('errorMsg');
   var showErr = function (m) { errorMsg.textContent = m; errorMsg.classList.add('visible'); };
+
+  if (_actionsBlocked) { showErr('Offline access has expired. Reconnect to the network to sign in. Your drafts and submission queue are saved.'); return; }
 
   // Build the payload and persist it to the durable outbox BEFORE sending, so the
   // submission survives a connection drop, reload, or app suspension.
@@ -3796,6 +3957,12 @@ function setConnState(online) {
   var changed = (online !== _connOnline);
   _connOnline = online;
   applyConnUI(online);
+  if (window.CARLAuth) CARLAuth.setStatus({ online: online });
+  // Re-evaluate offline-auth on any transition: coming online slides the 7-day window and
+  // catches revocation / the 30-day checkpoint; going offline flips the UI to the grace
+  // notice or the expiry block. Only when a cache already exists (boot calls it directly).
+  if (changed && _authCache && window.CARLAuth) evaluateAuthState({ trigger: online ? 'reconnect' : 'disconnect' });
+  updateOfflineNotice();
   if (changed && online) onReconnect();
 }
 // Resolves true if the network is actually reachable, false otherwise.
@@ -4175,11 +4342,27 @@ function openSettings() {
   loadProfileFields();
   loadNotifToggles();
   updateStorageEstimate();
+  updateDeviceAccessInfo();
   var iMsg = document.getElementById('installMsg'); if (iMsg) iMsg.classList.remove('visible');
   var sqp = document.getElementById('settingsQueuePanel'); if (sqp) sqp.classList.remove('visible');
   panel.classList.add('visible');                 // fixed overlay -> page scroll position is preserved
   document.body.classList.add('modal-open');
   panel.scrollTop = 0;
+}
+function updateDeviceAccessInfo() {
+  var el = document.getElementById('deviceAccessInfo'); if (!el) return;
+  if (_offlineAuthDisabled) { el.textContent = 'Offline access is unavailable on this device (no secure key storage). An internet connection is required to use CARL.'; return; }
+  if (!_authCache) { el.textContent = 'This device is not yet bound.'; return; }
+  var label = (window.CARLAuth && CARLAuth.deviceLabel()) || 'This device';
+  var fp = (_authCache.fingerprint || '').slice(0, 12);
+  var lines = [];
+  lines.push(label + (fp ? ' · key ' + fp + '…' : ''));
+  lines.push('Last verified: ' + fmtVerified(_authCache.lastAuthAt));
+  var claims = (CARLAuth.parseClaims(_authCache.graceToken)) || {};
+  if (claims.gexp) lines.push('Offline access through: ' + fmtVerified(Math.min(claims.gexp, claims.hexp || claims.gexp)));
+  if (claims.hexp) lines.push('Sign-in required by: ' + fmtVerified(claims.hexp));
+  el.textContent = lines.join('\n');
+  el.style.whiteSpace = 'pre-line';
 }
 function closeSettings() {
   var panel = document.getElementById('settingsPanel'); if (!panel) return;
@@ -4222,6 +4405,9 @@ document.addEventListener('keydown', function (e) {
 
 (async function initPWA() {
   await refreshConnState();
+  // Offline-auth gate: restore the device-bound session from the encrypted cache (or show
+  // login). Replaces the old reload-always-drops-to-login behavior.
+  try { await evaluateAuthState({ trigger: 'boot' }); } catch (e) {}
   try { await refreshQueueUI(); } catch (e) {}
   try { await refreshDraftsUI(); } catch (e) {}
   if (window.CARL) CARL.registerSync();
