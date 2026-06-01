@@ -1430,6 +1430,13 @@
 
   @media (max-width: 600px) {
     .user-identity { display: none; }
+    header { padding: 14px 16px; }
+    /* Drop the auto-margin shove so the lights + actions wrap onto their own line
+       instead of overflowing the viewport (which clipped Logout and pushed the
+       More menu off-screen). user-bar keeps right alignment via its own auto margin. */
+    .status-bar { margin-left: 0; flex-wrap: wrap; }
+    .user-bar { margin-left: auto; }
+    .more-menu { max-width: calc(100vw - 32px); }
     .metrics-row { grid-template-columns: 1fr; }
     .metrics-row .field {
       border-right: none;
