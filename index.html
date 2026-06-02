@@ -808,6 +808,50 @@
   .badge-verified     { color: var(--confirmed); background: transparent; border: 1px solid var(--confirmed); }
   .badge-needs-review { color: var(--gold);      background: transparent; border: 1px solid var(--gold); }
 
+  /* v11 provenance vocabulary. Visual weight tracks the score:
+     LIBRARY -- VERIFIED (95%, all three layers) is strongest. */
+  .badge-lib-verified     { background: var(--confirmed); color: #fff; }
+  .badge-lib-confirmed    { color: var(--confirmed); background: transparent; border: 1px solid var(--confirmed); }
+  .badge-lib-review       { color: var(--gold); background: transparent; border: 1px solid var(--gold); }
+  .badge-ref-corroborated { background: #4a6b8a; color: #fff; }
+  .badge-ref-review       { background: #999; color: #fff; }
+
+  .provenance-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    padding: 3px 10px;
+    border-radius: 3px;
+  }
+
+  /* Verbatim NLM source text for LIBRARY citations (integrity feature) */
+  .source-text-block {
+    margin-top: 10px;
+    background: var(--citation-bg);
+    border: 1px solid var(--citation-border);
+    border-left: 3px solid var(--confirmed);
+    border-radius: 3px;
+    padding: 10px 12px;
+  }
+  .source-text-label {
+    font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--label); margin-bottom: 5px;
+  }
+  .source-text-quote {
+    font-size: 0.82rem; line-height: 1.5; color: var(--text);
+    white-space: pre-wrap; border-left: 2px solid var(--citation-border);
+    padding-left: 10px; font-style: italic;
+  }
+  .source-text-meta { font-size: 0.66rem; color: var(--label); margin-top: 6px; }
+  .source-text-unavailable { font-size: 0.74rem; color: var(--label); font-style: italic; margin-top: 8px; }
+  .verify-hint { font-size: 0.7rem; color: var(--label); font-style: italic; margin-top: 6px; }
+  .citation-notice {
+    background: #fff6e0; border: 1px solid var(--gold); border-radius: 3px;
+    padding: 12px 14px; margin: 12px 0; font-size: 0.86rem; line-height: 1.5;
+    color: #6b4e00;
+  }
+
   /* Citations list */
   .citations-section { margin-top: 16px; }
 
@@ -1790,9 +1834,17 @@
           <div class="field-label" id="rDescriptionLabel">Non-Conformance Description</div>
           <div class="field-value" id="rDescription"></div>
         </div>
+        <div class="citation-notice" id="rCitationNotice" style="display:none;"></div>
         <div class="field">
           <div class="field-label">Primary Regulatory Citation</div>
           <div class="field-value mono" id="rCitation"></div>
+          <div class="source-text-block" id="rSourceTextBlock" style="display:none;">
+            <div class="source-text-label" id="rSourceTextLabel">Source Text (verbatim from library)</div>
+            <div class="source-text-quote" id="rSourceText"></div>
+            <div class="source-text-meta" id="rSourceTextMeta"></div>
+          </div>
+          <div class="source-text-unavailable" id="rSourceTextUnavailable" style="display:none;"></div>
+          <div class="verify-hint" id="rVerifyHint" style="display:none;">Reference only &mdash; verify against the source document directly.</div>
         </div>
 
         <div class="metrics-row">
@@ -1999,8 +2051,13 @@
 <script src="/carl-db.js"></script>
 <script src="/carl-offline-auth.js"></script>
 <script>
-var DAILY_REPORT_URL = 'https://n8n.carlcompliance.com/webhook/carl-daily-report';
-var ASK_RESULT_URL = 'https://n8n.carlcompliance.com/webhook/carl-ask-result';
+// On the preview origin, target the isolated draft workflow webhooks
+// (carl-*-draft) so staging tests never touch production. Production hostname
+// keeps the live paths, so this is safe to merge to main.
+var IS_PREVIEW = (location.hostname === 'preview.carlcompliance.com');
+var WEBHOOK_SUFFIX = IS_PREVIEW ? '-draft' : '';
+var DAILY_REPORT_URL = 'https://n8n.carlcompliance.com/webhook/carl-daily-report' + WEBHOOK_SUFFIX;
+var ASK_RESULT_URL = 'https://n8n.carlcompliance.com/webhook/carl-ask-result' + WEBHOOK_SUFFIX;
 var AUTH_URL = 'https://auth.carlcompliance.com';
 // ELEVENLABS KEY REMOVED - routed through backend
 var authToken = null;
@@ -2974,6 +3031,18 @@ function renderResults(d, isQuery) {
   document.getElementById('rDescription').textContent = d.non_conformance_description || d.observation_summary || '—';
   document.getElementById('rCitation').textContent = d.primary_regulatory_citation || '—';
 
+  // Zero-citation gate notice (no citation could be confirmed).
+  var citeNotice = document.getElementById('rCitationNotice');
+  if (d.no_citation_confirmed === true && d.citation_notice) {
+    citeNotice.textContent = d.citation_notice;
+    citeNotice.style.display = '';
+  } else {
+    citeNotice.style.display = 'none';
+  }
+
+  // Verbatim source text (LIBRARY) / verify hint (REFERENCE).
+  renderPrimarySourceText(d);
+
   // Additional regulatory citations
   var addCitList = document.getElementById('additionalCitationsList');
   var addCitSection = document.getElementById('additionalCitationsSection');
@@ -2989,16 +3058,25 @@ function renderResults(d, isQuery) {
       var source = (c.sourceName || 'Unknown') + ' ' + (c.section || '');
       var req = c.requirement || '';
       var status = c.verification_status || '';
-      var badgeClass = status.includes('CONFIRMED') ? 'badge-confirmed' :
-                       status.includes('VERIFIED') ? 'badge-verified' :
-                       status.includes('NEEDS REVIEW') ? 'badge-needs-review' :
-                       status === 'UNVERIFIED' ? 'badge-unverified' : 'badge-ref';
+      var badgeClass = provBadgeClass(status);
       var confDisplay = (typeof c.verification_confidence === 'number') ? ' ' + c.verification_confidence.toFixed(2) : '';
       var displayStatus = displayVerificationStatus(status);
       var badgeHtml = displayStatus ? '<span class="verification-badge ' + badgeClass + '">' + escapeHtml(displayStatus) + confDisplay + '</span>' : '';
+      var isLib = status.indexOf('LIBRARY') === 0 || c.in_library === true;
+      var extraHtml = '';
+      if (isLib && c.library_text_available && c.library_source_text) {
+        var cMeta = [];
+        if (c.library_source_name) cMeta.push(c.library_source_name);
+        if (c.library_cited_section) cMeta.push('cited section ' + c.library_cited_section);
+        extraHtml = '<div class="source-text-block"><div class="source-text-label">Source Text (verbatim from library)</div>' +
+                    '<div class="source-text-quote">' + escapeHtml(c.library_source_text) + '</div>' +
+                    (cMeta.length ? '<div class="source-text-meta">' + escapeHtml(cMeta.join('  ·  ')) + '</div>' : '') + '</div>';
+      } else if (!isLib) {
+        extraHtml = '<div class="verify-hint">Reference only &mdash; verify against the source document directly.</div>';
+      }
       item.innerHTML =
         '<div class="citation-source">' + escapeHtml(source.trim()) + badgeHtml + '</div>' +
-        '<div class="citation-text">' + escapeHtml(req) + '</div>';
+        '<div class="citation-text">' + escapeHtml(req) + '</div>' + extraHtml;
       addCitList.appendChild(item);
     });
   }
@@ -3015,15 +3093,10 @@ function renderResults(d, isQuery) {
 
   var prov = document.getElementById('rProvenance');
   prov.textContent = displayProvenance(d.provenance);
-  prov.className = 'field-value provenance';
   if (evalType === 'COMPLIANT') {
-    prov.classList.add('prov-compliant');
-  } else if (d.provenance && d.provenance.includes('CONFIRMED')) {
-    prov.classList.add('prov-confirmed');
-  } else if (d.provenance && d.provenance.includes('VERIFIED')) {
-    prov.classList.add('prov-verified');
-  } else if (d.provenance && d.provenance.includes('NEEDS REVIEW')) {
-    prov.classList.add('prov-needs-review');
+    prov.className = 'field-value provenance prov-compliant';
+  } else {
+    prov.className = 'field-value provenance provenance-badge ' + provBadgeClass(d.provenance);
   }
 
   document.getElementById('rRationale').textContent = d.evaluation_rationale || '—';
@@ -3360,7 +3433,7 @@ async function toggleTts() {
 }
 
 // Daily Log
-var WEBHOOK_URL = 'https://n8n.carlcompliance.com/webhook/carl-verify';
+var WEBHOOK_URL = 'https://n8n.carlcompliance.com/webhook/carl-verify' + WEBHOOK_SUFFIX;
 var DEFAULT_NOTEBOOK_URL = 'https://notebooklm.google.com/notebook/7f200849-1e73-4335-91c3-d7c37715897c';
 
 function getSelectedNotebookUrl() {
@@ -3429,13 +3502,9 @@ async function loadDailyLog() {
       html += '<div class="log-loading">No entries for today.</div>';
     } else {
       entries.forEach(function(e, idx) {
-        var provClass = 'log-prov-other';
         var prov = e.provenance || '';
         var citeEval = e.citation_evaluation || '';
-        if (citeEval === 'COMPLIANT') provClass = 'log-prov-compliant';
-        else if (prov.includes('CONFIRMED')) provClass = 'log-prov-triple';
-        else if (prov.includes('VERIFIED')) provClass = 'log-prov-dual';
-        else if (prov.includes('NEEDS REVIEW')) provClass = 'log-prov-parametric';
+        var provClass = (citeEval === 'COMPLIANT') ? 'badge-compliant' : provBadgeClass(prov);
 
         var entryId = 'logEntry' + idx;
         html += '<div class="log-entry" id="' + entryId + '">';
@@ -3445,7 +3514,7 @@ async function loadDailyLog() {
         html += '<div class="log-entry-header">';
         html += '<span class="log-entry-disc"><span class="log-expand-arrow">&#x25B6;</span> ' + escapeHtml(e.discipline) + '</span>';
         html += '<span style="display:flex;align-items:center;gap:6px;">';
-        html += '<span class="log-entry-prov ' + provClass + '">' + escapeHtml(displayProvenance(prov)) + '</span>';
+        html += '<span class="log-entry-prov verification-badge ' + provClass + '">' + escapeHtml(displayProvenance(prov)) + '</span>';
         if (e.processed_at) {
           html += '<button class="log-entry-delete" onclick="event.stopPropagation();deleteLogEntry(\'' + escapeHtml(e.processed_at) + '\')" title="Delete entry">&times;</button>';
         }
@@ -3492,6 +3561,32 @@ async function loadDailyLog() {
           html += '</div>';
         }
 
+        // Zero-citation notice
+        if (e.no_citation_confirmed === true && e.citation_notice) {
+          html += '<div class="citation-notice">' + escapeHtml(e.citation_notice) + '</div>';
+        }
+
+        // Primary regulatory citation with provenance badge + verbatim source text
+        if (e.primary_regulatory_citation) {
+          html += '<div class="log-detail-field">';
+          html += '<div class="log-detail-label">Primary Regulatory Citation</div>';
+          var pBadge = (citeEval === 'COMPLIANT') ? '' :
+            ' <span class="verification-badge ' + provBadgeClass(prov) + '">' + escapeHtml(displayProvenance(prov)) +
+            (e.confidence_score != null ? ' ' + e.confidence_score.toFixed(2) : '') + '</span>';
+          html += '<div class="log-detail-cite-source">' + escapeHtml(e.primary_regulatory_citation) + pBadge + '</div>';
+          var pIsLib = prov.indexOf('LIBRARY') === 0 || e.primary_in_library === true;
+          if (pIsLib && e.library_text_available && e.library_source_text) {
+            html += '<div class="source-text-block"><div class="source-text-label">Source Text (verbatim from library)</div>' +
+                    '<div class="source-text-quote">' + escapeHtml(e.library_source_text) + '</div>' +
+                    (e.library_source_name ? '<div class="source-text-meta">' + escapeHtml(e.library_source_name) + '</div>' : '') + '</div>';
+          } else if (pIsLib) {
+            html += '<div class="source-text-unavailable">This document is in the reference library, but no verbatim passage was returned for this query. Verify against the source document directly.</div>';
+          } else {
+            html += '<div class="verify-hint">Reference only &mdash; verify against the source document directly.</div>';
+          }
+          html += '</div>';
+        }
+
         // Additional regulatory citations with verification badges
         var addCits = e.additional_regulatory_citations || [];
         if (addCits.length > 0) {
@@ -3501,16 +3596,21 @@ async function loadDailyLog() {
             html += '<div class="log-detail-cite">';
             var src = (c.sourceName || 'Unknown') + ' ' + (c.section || '');
             var vstatus = c.verification_status || '';
-            var vbadgeClass = vstatus.includes('CONFIRMED') ? 'badge-confirmed' :
-                              vstatus.includes('VERIFIED') ? 'badge-verified' :
-                              vstatus.includes('NEEDS REVIEW') ? 'badge-needs-review' :
-                              vstatus === 'UNVERIFIED' ? 'badge-unverified' : 'badge-ref';
+            var vbadgeClass = provBadgeClass(vstatus);
             var vconf = (typeof c.verification_confidence === 'number') ? ' ' + c.verification_confidence.toFixed(2) : '';
             var vdisplay = displayVerificationStatus(vstatus);
             var vbadge = vdisplay ? ' <span class="verification-badge ' + vbadgeClass + '">' + escapeHtml(vdisplay) + vconf + '</span>' : '';
             html += '<div class="log-detail-cite-source">' + escapeHtml(src.trim()) + vbadge + '</div>';
             if (c.requirement) {
               html += '<div class="log-detail-cite-text">' + escapeHtml(c.requirement) + '</div>';
+            }
+            var cIsLib = vstatus.indexOf('LIBRARY') === 0 || c.in_library === true;
+            if (cIsLib && c.library_text_available && c.library_source_text) {
+              html += '<div class="source-text-block"><div class="source-text-label">Source Text (verbatim from library)</div>' +
+                      '<div class="source-text-quote">' + escapeHtml(c.library_source_text) + '</div>' +
+                      (c.library_source_name ? '<div class="source-text-meta">' + escapeHtml(c.library_source_name) + '</div>' : '') + '</div>';
+            } else if (!cIsLib) {
+              html += '<div class="verify-hint">Reference only &mdash; verify against the source document directly.</div>';
             }
             html += '</div>';
           });
@@ -3591,9 +3691,10 @@ async function deleteLogEntry(processedAt) {
 // Display translations for internal pipeline terms
 function displayProvenance(prov) {
   if (!prov) return '—';
-  if (prov === 'LIBRARY -- CONFIRMED') return 'Library — Confirmed';
   if (prov === 'LIBRARY -- VERIFIED') return 'Library — Verified';
+  if (prov === 'LIBRARY -- CONFIRMED') return 'Library — Confirmed';
   if (prov === 'LIBRARY -- NEEDS REVIEW') return 'Library — Needs Review';
+  if (prov === 'REFERENCE -- CORROBORATED') return 'Reference — Corroborated';
   if (prov === 'REFERENCE -- VERIFIED') return 'Reference — Verified';
   if (prov === 'REFERENCE -- NEEDS REVIEW') return 'Reference — Needs Review';
   return prov;
@@ -3601,13 +3702,60 @@ function displayProvenance(prov) {
 
 function displayVerificationStatus(status) {
   if (!status) return '';
-  if (status === 'LIBRARY -- CONFIRMED') return 'Library — Confirmed';
   if (status === 'LIBRARY -- VERIFIED') return 'Library — Verified';
+  if (status === 'LIBRARY -- CONFIRMED') return 'Library — Confirmed';
   if (status === 'LIBRARY -- NEEDS REVIEW') return 'Library — Needs Review';
+  if (status === 'REFERENCE -- CORROBORATED') return 'Reference — Corroborated';
   if (status === 'REFERENCE -- VERIFIED') return 'Reference — Verified';
   if (status === 'REFERENCE -- NEEDS REVIEW') return 'Reference — Needs Review';
   if (status === 'UNVERIFIED') return 'Pending Verification';
   return status;
+}
+
+// Map a v11 provenance/verification label to its badge CSS class.
+// Order matters: VERIFIED and CONFIRMED both contain neither each other,
+// but NEEDS REVIEW must be checked after the specific LIBRARY/REFERENCE tiers.
+function provBadgeClass(s) {
+  s = s || '';
+  if (s.indexOf('LIBRARY -- VERIFIED') === 0) return 'badge-lib-verified';
+  if (s.indexOf('LIBRARY -- CONFIRMED') === 0) return 'badge-lib-confirmed';
+  if (s.indexOf('LIBRARY') === 0) return 'badge-lib-review';
+  if (s.indexOf('REFERENCE -- CORROBORATED') === 0) return 'badge-ref-corroborated';
+  if (s.indexOf('REFERENCE') === 0) return 'badge-ref-review';
+  if (s === 'UNVERIFIED') return 'badge-unverified';
+  return 'badge-ref-review';
+}
+
+// Render the verbatim NLM source text for a LIBRARY citation into the result
+// panel. For REFERENCE (or zero-citation) callers hide these elements.
+function renderPrimarySourceText(d) {
+  var block = document.getElementById('rSourceTextBlock');
+  var unavail = document.getElementById('rSourceTextUnavailable');
+  var hint = document.getElementById('rVerifyHint');
+  var quote = document.getElementById('rSourceText');
+  var meta = document.getElementById('rSourceTextMeta');
+  block.style.display = 'none';
+  unavail.style.display = 'none';
+  hint.style.display = 'none';
+  var prov = d.provenance || '';
+  var isLibrary = prov.indexOf('LIBRARY') === 0 || d.primary_in_library === true;
+  if (!isLibrary) {
+    // REFERENCE: no source text exists; show the verify hint only.
+    if (d.primary_regulatory_citation) hint.style.display = '';
+    return;
+  }
+  if (d.library_text_available && d.library_source_text) {
+    quote.textContent = d.library_source_text;
+    var metaBits = [];
+    if (d.library_source_name) metaBits.push(d.library_source_name);
+    if (d.library_cited_section) metaBits.push('cited section ' + d.library_cited_section);
+    meta.textContent = metaBits.join('  ·  ');
+    block.style.display = '';
+  } else {
+    // Document is in the library, but NLM returned no passage for this query.
+    unavail.textContent = 'This document is in the reference library, but no verbatim passage was returned for this query. Verify against the source document directly.';
+    unavail.style.display = '';
+  }
 }
 
 function displayEvalType(evalType) {
