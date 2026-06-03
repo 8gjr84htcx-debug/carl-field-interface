@@ -2051,11 +2051,12 @@
 <script src="/carl-db.js"></script>
 <script src="/carl-offline-auth.js"></script>
 <script>
-// On the preview origin, target the isolated draft workflow webhooks
-// (carl-*-draft) so staging tests never touch production. Production hostname
-// keeps the live paths, so this is safe to merge to main.
+// The isolated draft workflow (carl-*-draft) is retired and v11 is merged to
+// production, so preview now targets the live production webhooks directly.
+// Production CORS reflects the preview origin (Access-Control-Allow-Origin:
+// https://preview.carlcompliance.com), so cross-origin calls from preview pass.
 var IS_PREVIEW = (location.hostname === 'preview.carlcompliance.com');
-var WEBHOOK_SUFFIX = IS_PREVIEW ? '-draft' : '';
+var WEBHOOK_SUFFIX = '';
 var DAILY_REPORT_URL = 'https://n8n.carlcompliance.com/webhook/carl-daily-report' + WEBHOOK_SUFFIX;
 var ASK_RESULT_URL = 'https://n8n.carlcompliance.com/webhook/carl-ask-result' + WEBHOOK_SUFFIX;
 var AUTH_URL = 'https://auth.carlcompliance.com';
@@ -2949,7 +2950,13 @@ async function submitObservation() {
     pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
   } catch (err) {
     if (settled) return; settled = true;
-    var net = err.name === 'AbortError' || (err.message && (err.message.indexOf('Failed to fetch') >= 0 || err.message.indexOf('NetworkError') >= 0));
+    // A failed/aborted/CORS-blocked fetch throws AbortError or TypeError (the
+    // body/HTTP-status errors below throw plain Error instead). Match by error
+    // name plus the various browser messages -- Chrome says "Failed to fetch",
+    // Safari/iOS say "Load failed" / "The network connection was lost".
+    var em = err.message || '';
+    var net = err.name === 'AbortError' || err.name === 'TypeError' ||
+              /failed to fetch|networkerror|load failed|connection was lost|connection appears to be offline|cancelled/i.test(em);
     if (net) {
       item.status = 'queued'; try { await CARL.updateOutbox(item); } catch (e) {} // never reached the server -> retry on reconnect
       setConnState(false);
@@ -3071,7 +3078,9 @@ function renderResults(d, isQuery) {
         extraHtml = '<div class="source-text-block"><div class="source-text-label">Source Text (verbatim from library)</div>' +
                     '<div class="source-text-quote">' + escapeHtml(c.library_source_text) + '</div>' +
                     (cMeta.length ? '<div class="source-text-meta">' + escapeHtml(cMeta.join('  ·  ')) + '</div>' : '') + '</div>';
-      } else if (!isLib) {
+      } else if (isLib) {
+        extraHtml = '<div class="verify-hint">In the reference library, but no verbatim passage was returned for this query &mdash; verify against the source document directly.</div>';
+      } else {
         extraHtml = '<div class="verify-hint">Reference only &mdash; verify against the source document directly.</div>';
       }
       item.innerHTML =
@@ -3092,12 +3101,14 @@ function renderResults(d, isQuery) {
   document.getElementById('rApplicability').textContent = d.applicability || '—';
 
   var prov = document.getElementById('rProvenance');
-  prov.textContent = displayProvenance(d.provenance);
-  if (evalType === 'COMPLIANT') {
-    prov.className = 'field-value provenance prov-compliant';
-  } else {
-    prov.className = 'field-value provenance provenance-badge ' + provBadgeClass(d.provenance);
-  }
+  // Verified By card: render the SAME badge component as the inline citation
+  // badges below -- identical label, confidence score, and styling -- so the
+  // summary card and the inline badges always match. (v11 issues #2 and #3)
+  var provScore = (typeof d.confidence_score === 'number') ? ' ' + d.confidence_score.toFixed(2) : '';
+  var provBadgeCls = (evalType === 'COMPLIANT') ? 'badge-compliant' : provBadgeClass(d.provenance);
+  prov.className = 'field-value provenance';
+  prov.innerHTML = '<span class="verification-badge ' + provBadgeCls + '">' +
+                   escapeHtml(displayProvenance(d.provenance)) + provScore + '</span>';
 
   document.getElementById('rRationale').textContent = d.evaluation_rationale || '—';
 
@@ -4145,7 +4156,9 @@ var updateConnUI = refreshConnState; // back-compat alias for existing callers
 /* ---- Submission queue UI ---- */
 async function refreshQueueUI() {
   var rows = await CARL.listOutbox();
-  var pending = rows.filter(function (i) { return i.status === 'queued' || i.status === 'sending' || i.status === 'sent'; });
+  // Count every item that still needs attention or retry -- including 'error' --
+  // so the QUEUE badge never reads (0) while a failed submission is sitting there.
+  var pending = rows.filter(function (i) { return i.status === 'queued' || i.status === 'sending' || i.status === 'sent' || i.status === 'error'; });
   var badge = document.getElementById('queueBadge');
   if (badge) { badge.textContent = pending.length; badge.classList.toggle('visible', pending.length > 0); }
   var qc = document.getElementById('queueCount'); if (qc) qc.textContent = '(' + pending.length + ')';
