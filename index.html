@@ -2059,8 +2059,10 @@ var IS_PREVIEW = (location.hostname === 'preview.carlcompliance.com');
 var WEBHOOK_SUFFIX = '';
 var DAILY_REPORT_URL = 'https://n8n.carlcompliance.com/webhook/carl-daily-report' + WEBHOOK_SUFFIX;
 var ASK_RESULT_URL = 'https://n8n.carlcompliance.com/webhook/carl-ask-result' + WEBHOOK_SUFFIX;
+var TRANSCRIBE_URL = 'https://auth.carlcompliance.com/transcribe';
 var AUTH_URL = 'https://auth.carlcompliance.com';
-// ELEVENLABS KEY REMOVED - routed through backend
+// ELEVENLABS KEY REMOVED - audio goes to the auth service /transcribe route, which validates the bearer token natively before calling ElevenLabs
+var MAX_RECORDING_MS = 60000; // hard cap on a single voice memo; keeps the proxy call well under Cloudflare's free-tier 100s edge timeout
 var authToken = null;
 var authUser = null;
 var attachedPhotoBase64 = null;
@@ -3237,6 +3239,7 @@ document.getElementById('observation').addEventListener('input', function() {
 var micRecording = false;
 var mediaRecorder = null;
 var audioChunks = [];
+var micCapTimer = null;
 
 function toggleMic() {
   var btn = document.getElementById('micBtn');
@@ -3265,16 +3268,22 @@ function startMic() {
 
     mediaRecorder.start();
     micRecording = true;
+    // Hard cap the memo length so a long recording can never push the
+    // transcription request toward the Cloudflare free-tier edge timeout.
+    micCapTimer = setTimeout(function() {
+      if (micRecording) stopMic();
+    }, MAX_RECORDING_MS);
     var btn = document.getElementById('micBtn');
     btn.classList.add('recording');
     btn.innerHTML = '&#x23F9;';
-    btn.title = 'Stop recording';
+    btn.title = 'Stop recording (auto-stops at 60s)';
   }).catch(function(err) {
     alert('Microphone access denied: ' + err.message);
   });
 }
 
 function stopMic() {
+  if (micCapTimer) { clearTimeout(micCapTimer); micCapTimer = null; }
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
   }
@@ -3293,36 +3302,37 @@ async function transcribeAudio(blob) {
 
   var savedValue = textarea.value;
 
-  // Voice transcription disabled — ElevenLabs key removed from frontend.
-  // Backend proxy pending. Restore fetch call once /transcribe endpoint exists.
-  alert('Voice transcription is temporarily unavailable — backend proxy pending.');
-  textarea.disabled = false;
-  btn.classList.remove('transcribing');
-  btn.innerHTML = '&#x1F3A4;';
-  btn.title = 'Voice input';
-  return;
+  // Voice transcription requires a live session token. The auth service's
+  // /transcribe route validates the bearer natively before it will spend
+  // ElevenLabs credits, so a missing/invalid token is rejected with 401.
+  // Grace-mode / offline devices carry no live token (authHeaders adds none), so
+  // transcription is gated behind an online sign-in rather than failing opaquely.
+  if (!authToken) {
+    btn.classList.remove('transcribing');
+    btn.innerHTML = '&#x1F3A4;';
+    btn.title = 'Voice input';
+    errorMsg.textContent = 'Voice transcription requires an active sign-in. Please sign in while online, then try again.';
+    errorMsg.classList.add('visible');
+    return;
+  }
 
-  // eslint-disable-next-line no-unreachable
   textarea.value = 'Transcribing...';
   textarea.disabled = true;
 
   try {
-    var ext = 'webm';
-    var mime = blob.type || '';
-    if (mime.includes('mp4')) ext = 'mp4';
-    else if (mime.includes('ogg')) ext = 'ogg';
-
-    var formData = new FormData();
-    formData.append('file', blob, 'recording.' + ext);
-    formData.append('model_id', 'scribe_v1');
-
-    var resp = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+    // Send the recording as a raw body; the /transcribe route reads it and builds
+    // the ElevenLabs multipart server-side (model_id is fixed there). authHeaders()
+    // adds the bearer token, which the auth service validates natively before ElevenLabs.
+    var resp = await fetch(TRANSCRIBE_URL, {
       method: 'POST',
-      headers: {
-        // 'xi-api-key': backend proxy pending
-      },
-      body: formData
+      headers: authHeaders({ 'Content-Type': blob.type || 'application/octet-stream' }),
+      body: blob
     });
+
+    if (resp.status === 401 || resp.status === 403) {
+      handleAuthFailure();
+      throw new Error('Session expired — please sign in again to use voice transcription.');
+    }
 
     if (!resp.ok) {
       var errBody = await resp.text();

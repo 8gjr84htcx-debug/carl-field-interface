@@ -13,7 +13,7 @@
  * "drafts" and "secure" (offline-auth material, owned by carl-offline-auth.js).
  * Bump SHELL_CACHE when shell assets change to force an update.
  */
-const SHELL_CACHE = 'carl-shell-v7';
+const SHELL_CACHE = 'carl-shell-v8';
 const WEBHOOK_URL = 'https://n8n.carlcompliance.com/webhook/carl-verify';
 
 const SHELL_ASSETS = [
